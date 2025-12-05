@@ -67,13 +67,10 @@ def validate_config() -> bool:
         print("=" * 60)
         print()
         print("Next steps:")
-        print(
-            "1. Create MongoDB Atlas vector search index (see .claude/reference/mongodb-patterns.md)"
-        )
-        print("2. Create MongoDB Atlas full-text search index")
-        print(
-            "3. Run: uv run python -m src.dependencies (Phase 2 - test MongoDB connection)"
-        )
+        print("1. Add documents to the ./documents/ folder")
+        print("2. Run ingestion: uv run python -m src.ingestion.ingest -d ./documents")
+        print("3. Create search indexes in MongoDB Atlas (after ingestion completes)")
+        print("   See README.md for index creation instructions")
         print()
 
         return True

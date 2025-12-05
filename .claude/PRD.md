@@ -449,31 +449,31 @@ The MVP is considered successful when users can:
 
 ---
 
-### Phase 2: Document Ingestion Pipeline ⏳ NEXT
+### Phase 2: Document Ingestion Pipeline ✅ COMPLETE
 
 **Goal:** Build complete ingestion pipeline from documents to embedded chunks in MongoDB
 
 **Deliverables:**
-- Docling integration for multi-format conversion
-- HybridChunker wrapper preserving document structure
-- Embedding generator with batch processing
-- MongoDB connection with PyMongo async driver
-- MongoDB inserter for documents and chunks
-- Document/chunk two-collection pattern
-- Metadata extraction and storage
-- CLI for ingestion with progress tracking
-- Audio transcription support
-- Search index creation instructions
+- ✅ Docling integration for multi-format conversion
+- ✅ HybridChunker wrapper preserving document structure
+- ✅ Embedding generator with batch processing
+- ✅ MongoDB connection with PyMongo async driver
+- ✅ MongoDB inserter for documents and chunks
+- ✅ Document/chunk two-collection pattern
+- ✅ Metadata extraction and storage
+- ✅ CLI for ingestion with progress tracking
+- ✅ Audio transcription support
+- ✅ Search index creation instructions
 
 **Validation Criteria:**
-- Successfully processes 10+ mixed-format documents
-- Chunks average 400-600 tokens (fits embedding limits)
-- Document-chunk relationships properly established
-- Embeddings generated for all chunks
-- Data stored in MongoDB Atlas (`rag_db.documents` and `rag_db.chunks`)
-- Vector and full-text search indexes created in Atlas UI
-- Ingestion completes without crashes on errors
-- Progress visible to user
+- ✅ Successfully processes 10+ mixed-format documents
+- ✅ Chunks average 400-600 tokens (fits embedding limits)
+- ✅ Document-chunk relationships properly established
+- ✅ Embeddings generated for all chunks
+- ✅ Data stored in MongoDB Atlas (`rag_db.documents` and `rag_db.chunks`)
+- Vector and full-text search indexes created in Atlas UI (manual step after ingestion)
+- ✅ Ingestion completes without crashes on errors
+- ✅ Progress visible to user
 
 **Key Files:**
 - `src/ingestion/chunker.py`
@@ -486,68 +486,72 @@ The MVP is considered successful when users can:
 
 ---
 
-### Phase 3: Search Tools Implementation
+### Phase 3: Agent, Search Tools & CLI ⏳ NEXT
 
-**Goal:** Implement semantic and hybrid search tools using MongoDB aggregation pipelines
+**Goal:** Build complete conversational RAG agent with MongoDB search and Rich CLI interface
+
+**Rationale:** Agent and tools must be implemented together since tools are useless without the agent framework to call them. The CLI provides the interface to test the complete system end-to-end.
 
 **Deliverables:**
-- Semantic search using `$vectorSearch`
-- Hybrid search using `$rankFusion`
-- Document lookup for source attribution
-- Score extraction and normalization
-- Fuzzy matching configuration
-- SearchResult Pydantic models
+
+**Search Tools (`src/tools.py`):**
+- Semantic search using MongoDB `$vectorSearch` aggregation
+- Hybrid search using MongoDB `$rankFusion` operator
+- Document lookup with `$lookup` for source attribution
+- Score extraction using `{"$meta": "vectorSearchScore"}`
+- SearchResult Pydantic model
 - Error handling for missing indexes
-- Tool function wrappers for agent
+- Embedding format as Python list (not PostgreSQL string)
+
+**Agent (`src/agent.py`):**
+- Pydantic AI Agent with `StateDeps[RAGState]` pattern
+- `RAGState` BaseModel for shared state
+- `search_knowledge_base` tool wrapper
+- Dynamic instructions via `@agent.instructions`
+- Dependency initialization and cleanup within tool
+- Formatted string responses for LLM
+
+**CLI (`src/cli.py`):**
+- Rich-based conversational interface
+- Real-time streaming of agent responses
+- Tool call visibility (query, search type, match count)
+- Message history management for context
+- Special commands: `info`, `clear`, `exit`
+- Node handling: `user_prompt`, `model_request`, `call_tools`, `end`
+
+**Prompts (`src/prompts.py`):**
+- System prompt explaining capabilities
+- Search strategy guidance (when to search vs respond)
+- Hybrid search as default approach
 
 **Validation Criteria:**
 - Semantic search returns relevant results from ingested data
-- Hybrid search combines vector + text scores
-- Source document info included in results
+- Hybrid search combines vector + text scores via `$rankFusion`
+- Source document info included in all results
 - Queries complete in <2 seconds
 - Top 5 results include correct answer >80% of the time
-- Graceful handling of empty results
+- Graceful handling of empty results and missing indexes
+- Agent responds conversationally without unnecessary searches
+- Search tools called appropriately based on query type
+- Streaming responses appear in real-time
+- Tool calls visible to user with query details
+- Conversation context maintained across turns
+- Special commands work correctly
+- Handles multiple LLM providers (OpenRouter, OpenAI, etc.)
 
 **Key Files:**
 - `src/tools.py` (MongoDB search implementation)
-- `src/models.py` (SearchResult and other Pydantic models)
+- `src/agent.py` (Pydantic AI agent)
+- `src/cli.py` (Rich CLI interface)
+- `src/prompts.py` (System prompts)
 
-**Prerequisites:** Phase 2 must be complete with data in MongoDB and search indexes created.
-
----
-
-### Phase 4: Agent & CLI
-
-**Goal:** Build Pydantic AI agent and conversational CLI interface
-
-**Deliverables:**
-- Pydantic AI agent with search tools
-- StateDeps dependency injection
-- System prompts for agent behavior
-- Rich-based CLI with streaming
-- Tool call visibility
-- Message history management
-- Special commands (info, clear, exit)
-- Error handling and user feedback
-
-**Validation Criteria:**
-- Agent responds conversationally
-- Search tools called appropriately
-- Streaming responses appear in real-time
-- Tool calls visible to user
-- Conversation context maintained
-- Handles multiple LLM providers
-
-**Key Files:**
-- `src/agent.py`
-- `src/cli.py`
-- `src/prompts.py`
-
-**Prerequisites:** Phase 3 must be complete with working search tools.
+**Prerequisites:**
+- Phase 2 complete with data in MongoDB
+- Search indexes created manually in Atlas UI (vector_index + text_index)
 
 ---
 
-### Phase 5: Testing & Documentation
+### Phase 4: Testing & Documentation
 
 **Goal:** Ensure system reliability, create user documentation, and validate against success criteria
 
@@ -571,7 +575,7 @@ The MVP is considered successful when users can:
 - `tests/fixtures/`
 - `README.md` (updated with usage examples)
 
-**Prerequisites:** Phases 1-4 complete.
+**Prerequisites:** Phases 1-3 complete.
 
 ## Leveraging Existing Examples
 
@@ -632,12 +636,10 @@ The MVP is considered successful when users can:
 
 **Development Workflow:**
 
-1. **Phase 1**: Create `src/` directory structure, set up UV, copy settings/providers
-2. **Phase 2**: Build MongoDB dependencies and connection management
-3. **Phase 3**: Implement MongoDB search tools with aggregation pipelines
-4. **Phase 4**: Copy and adapt ingestion pipeline for MongoDB
-5. **Phase 5**: Copy and adapt agent/CLI with updated imports
-6. **Phase 6**: Test end-to-end and document
+1. ✅ **Phase 1**: Create `src/` directory structure, set up UV, copy settings/providers
+2. ✅ **Phase 2**: Build MongoDB dependencies, connection management, and complete ingestion pipeline
+3. ⏳ **Phase 3**: Implement MongoDB search tools + Pydantic AI agent + Rich CLI together (integrated system)
+4. **Phase 4**: Test end-to-end and document
 
 **Key Advantages:**
 

@@ -253,71 +253,45 @@ class AgentDependencies:
 
 ### Vector Search Index
 
-**IMPORTANT**: Vector search indexes MUST be created in Atlas UI or via Atlas Admin API. Cannot be created programmatically via Motor/PyMongo.
+**IMPORTANT**: Must be created in Atlas UI. Cannot be created programmatically.
 
-**Atlas UI Setup:**
-1. Navigate to: Database → Collections → Search Indexes
-2. Click "Create Index"
-3. Select "Atlas Vector Search"
-4. Use JSON configuration:
+**Atlas UI:** Database → Search and Vector Search → Create Search Index → Pick "Vector Search"
 
 ```json
 {
-  "name": "vector_index",
-  "type": "vectorSearch",
-  "definition": {
-    "fields": [
-      {
-        "type": "vector",
-        "path": "embedding",
-        "numDimensions": 1536,
-        "similarity": "cosine"
-      }
-    ]
-  }
+  "fields": [
+    {
+      "type": "vector",
+      "path": "embedding",
+      "numDimensions": 1536,
+      "similarity": "cosine"
+    }
+  ]
 }
 ```
 
-**Similarity Options:**
-- `cosine`: Most common, measures angle between vectors (0-1, higher is better)
-- `euclidean`: Measures distance (lower is better)
-- `dotProduct`: Inner product (higher is better)
-
-**Match numDimensions to your embedding model:**
-- `text-embedding-3-small`: 1536
-- `text-embedding-3-large`: 3072
-- `voyage-3`: 1024
+**Similarity options:** `cosine`, `euclidean`, `dotProduct`
+**Dimensions:** 1536 for text-embedding-3-small, 3072 for text-embedding-3-large
 
 ### Full-Text Search Index
 
-**Atlas UI Setup:**
-1. Navigate to: Database → Collections → Search Indexes
-2. Click "Create Index"
-3. Select "Atlas Search"
-4. Use JSON configuration:
+**Atlas UI:** Database → Search and Vector Search → Create Search Index → Pick "Atlas Search"
 
 ```json
 {
-  "name": "text_index",
-  "type": "search",
-  "definition": {
-    "mappings": {
-      "dynamic": false,
-      "fields": {
-        "content": {
-          "type": "string",
-          "analyzer": "lucene.standard"
-        }
+  "mappings": {
+    "dynamic": false,
+    "fields": {
+      "content": {
+        "type": "string",
+        "analyzer": "lucene.standard"
       }
     }
   }
 }
 ```
 
-**Analyzer Options:**
-- `lucene.standard`: Good default, tokenizes on whitespace/punctuation
-- `lucene.english`: English-specific stemming (run → running → ran)
-- `lucene.keyword`: No tokenization, exact match
+**Analyzer options:** `lucene.standard` (default), `lucene.english` (stemming), `lucene.keyword` (exact)
 
 ## Error Handling
 
