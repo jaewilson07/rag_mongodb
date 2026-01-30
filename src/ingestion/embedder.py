@@ -130,7 +130,12 @@ class EmbeddingGenerator:
 
         for i in range(0, len(chunks), self.batch_size):
             batch_chunks = chunks[i:i + self.batch_size]
-            batch_texts = [chunk.content for chunk in batch_chunks]
+            batch_texts = [
+                (chunk.metadata.get("embedding_text") or chunk.content)
+                if chunk.metadata
+                else chunk.content
+                for chunk in batch_chunks
+            ]
 
             # Generate embeddings for this batch
             embeddings = await self.generate_embeddings_batch(batch_texts)
@@ -173,6 +178,10 @@ class EmbeddingGenerator:
             Query embedding
         """
         return await self.generate_embedding(query)
+
+    async def close(self) -> None:
+        """Close the embedding client."""
+        await embedding_client.close()
 
     def get_embedding_dimension(self) -> int:
         """Get the dimension of embeddings for this model."""

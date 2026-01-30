@@ -29,6 +29,14 @@ class Settings(BaseSettings):
         default="chunks", description="Collection for document chunks with embeddings"
     )
 
+    mongodb_collection_traces: str = Field(
+        default="traces", description="Collection for query traces"
+    )
+
+    mongodb_collection_feedback: str = Field(
+        default="feedback", description="Collection for user feedback"
+    )
+
     mongodb_vector_index: str = Field(
         default="vector_index",
         description="Vector search index name (must be created in Atlas UI)",
@@ -86,6 +94,61 @@ class Settings(BaseSettings):
 
     default_text_weight: float = Field(
         default=0.3, description="Default text weight for hybrid search (0-1)"
+    )
+
+    # Crawl4AI Configuration
+    crawl4ai_word_count_threshold: int = Field(
+        default=10, description="Minimum word count for Crawl4AI blocks"
+    )
+    crawl4ai_remove_overlay_elements: bool = Field(
+        default=True, description="Remove overlay elements during Crawl4AI"
+    )
+    crawl4ai_remove_base64_images: bool = Field(
+        default=True, description="Remove base64 images during Crawl4AI"
+    )
+    crawl4ai_cache_mode: str = Field(
+        default="BYPASS", description="Crawl4AI cache mode"
+    )
+    crawl4ai_browser_type: str = Field(
+        default="chromium", description="Crawl4AI browser type"
+    )
+    crawl4ai_timeout: int = Field(
+        default=30, description="Crawl4AI request timeout in seconds"
+    )
+    crawl4ai_max_depth: int = Field(
+        default=2, description="Crawl4AI deep crawl max depth"
+    )
+    crawl4ai_max_concurrent: int = Field(
+        default=10, description="Crawl4AI deep crawl max concurrency"
+    )
+    crawl4ai_user_agent: Optional[str] = Field(
+        default=None, description="Custom user agent for Crawl4AI"
+    )
+    crawl4ai_cookies: Optional[str] = Field(
+        default=None, description="Cookies for Crawl4AI (string format)"
+    )
+
+    # Google Drive / Docs Configuration
+    google_service_account_file: Optional[str] = Field(
+        default=None, description="Path to Google service account JSON"
+    )
+    google_impersonate_subject: Optional[str] = Field(
+        default=None, description="Optional user to impersonate"
+    )
+    google_drive_folder_ids: Optional[str] = Field(
+        default=None, description="Comma-separated Google Drive folder IDs"
+    )
+    google_drive_file_ids: Optional[str] = Field(
+        default=None, description="Comma-separated Google Drive file IDs"
+    )
+    google_docs_ids: Optional[str] = Field(
+        default=None, description="Comma-separated Google Docs IDs"
+    )
+
+    # Ingestion Job Queue
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis URL for ingestion job queue and status tracking",
     )
 
 

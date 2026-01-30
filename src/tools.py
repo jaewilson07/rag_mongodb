@@ -27,7 +27,8 @@ class SearchResult(BaseModel):
 async def semantic_search(
     ctx: RunContext[AgentDependencies],
     query: str,
-    match_count: Optional[int] = None
+    match_count: Optional[int] = None,
+    filters: Optional[Dict[str, Any]] = None,
 ) -> List[SearchResult]:
     """
     Perform pure semantic search using MongoDB vector similarity.
@@ -45,6 +46,8 @@ async def semantic_search(
     """
     try:
         deps = ctx.deps
+        deps.last_search_error = None
+        deps.last_search_error_code = None
 
         # Use default if not specified
         if match_count is None:
@@ -56,6 +59,8 @@ async def semantic_search(
         # Generate embedding for query (already returns list[float])
         query_embedding = await deps.get_embedding(query)
 
+        chunk_filter = _build_chunk_filter(filters)
+
         # Build MongoDB aggregation pipeline
         pipeline = [
             {
@@ -64,7 +69,8 @@ async def semantic_search(
                     "queryVector": query_embedding,
                     "path": "embedding",
                     "numCandidates": 100,  # Search space (10x limit is good default)
-                    "limit": match_count
+                    "limit": match_count,
+                    **({"filter": chunk_filter} if chunk_filter else {}),
                 }
             },
             {
@@ -86,7 +92,7 @@ async def semantic_search(
                     "similarity": {"$meta": "vectorSearchScore"},
                     "metadata": 1,
                     "document_title": "$document_info.title",
-                    "document_source": "$document_info.source"
+                    "document_source": "$document_info.source_url"
                 }
             }
         ]
@@ -118,20 +124,34 @@ async def semantic_search(
 
     except OperationFailure as e:
         error_code = e.code if hasattr(e, 'code') else None
+        if error_code == 291:
+            deps.last_search_error = (
+                "Vector search index missing or not ready. "
+                "Create the vector index for the chunks collection."
+            )
+        else:
+            deps.last_search_error = f"Semantic search failed: {str(e)}"
+        deps.last_search_error_code = error_code
         logger.error(
-            f"semantic_search_failed: query={query}, error={str(e)}, code={error_code}"
+            "semantic_search_failed: query=%s, error=%s, code=%s",
+            query,
+            str(e),
+            error_code,
         )
         # Return empty list on error (graceful degradation)
         return []
     except Exception as e:
-        logger.exception(f"semantic_search_error: query={query}, error={str(e)}")
+        deps.last_search_error = f"Semantic search error: {str(e)}"
+        deps.last_search_error_code = None
+        logger.exception("semantic_search_error: query=%s, error=%s", query, str(e))
         return []
 
 
 async def text_search(
     ctx: RunContext[AgentDependencies],
     query: str,
-    match_count: Optional[int] = None
+    match_count: Optional[int] = None,
+    filters: Optional[Dict[str, Any]] = None,
 ) -> List[SearchResult]:
     """
     Perform full-text search using MongoDB Atlas Search.
@@ -152,6 +172,8 @@ async def text_search(
     """
     try:
         deps = ctx.deps
+        deps.last_search_error = None
+        deps.last_search_error_code = None
 
         # Use default if not specified
         if match_count is None:
@@ -160,18 +182,27 @@ async def text_search(
         # Validate match count
         match_count = min(match_count, deps.settings.max_match_count)
 
+        search_filter = _build_search_filter(filters)
+
         # Build MongoDB Atlas Search aggregation pipeline
         pipeline = [
             {
                 "$search": {
                     "index": deps.settings.mongodb_text_index,
-                    "text": {
-                        "query": query,
-                        "path": "content",
-                        "fuzzy": {
-                            "maxEdits": 2,
-                            "prefixLength": 3
-                        }
+                    "compound": {
+                        "must": [
+                            {
+                                "text": {
+                                    "query": query,
+                                    "path": "content",
+                                    "fuzzy": {
+                                        "maxEdits": 2,
+                                        "prefixLength": 3
+                                    }
+                                }
+                            }
+                        ],
+                        "filter": search_filter,
                     }
                 }
             },
@@ -197,7 +228,7 @@ async def text_search(
                     "similarity": {"$meta": "searchScore"},  # Text relevance score
                     "metadata": 1,
                     "document_title": "$document_info.title",
-                    "document_source": "$document_info.source"
+                    "document_source": "$document_info.source_url"
                 }
             }
         ]
@@ -229,13 +260,26 @@ async def text_search(
 
     except OperationFailure as e:
         error_code = e.code if hasattr(e, 'code') else None
+        if error_code == 291:
+            deps.last_search_error = (
+                "Text search index missing or not ready. "
+                "Create the text search index for the chunks collection."
+            )
+        else:
+            deps.last_search_error = f"Text search failed: {str(e)}"
+        deps.last_search_error_code = error_code
         logger.error(
-            f"text_search_failed: query={query}, error={str(e)}, code={error_code}"
+            "text_search_failed: query=%s, error=%s, code=%s",
+            query,
+            str(e),
+            error_code,
         )
         # Return empty list on error (graceful degradation)
         return []
     except Exception as e:
-        logger.exception(f"text_search_error: query={query}, error={str(e)}")
+        deps.last_search_error = f"Text search error: {str(e)}"
+        deps.last_search_error_code = None
+        logger.exception("text_search_error: query=%s, error=%s", query, str(e))
         return []
 
 
@@ -317,7 +361,8 @@ async def hybrid_search(
     ctx: RunContext[AgentDependencies],
     query: str,
     match_count: Optional[int] = None,
-    text_weight: Optional[float] = None
+    text_weight: Optional[float] = None,
+    filters: Optional[Dict[str, Any]] = None,
 ) -> List[SearchResult]:
     """
     Perform hybrid search combining semantic and keyword matching.
@@ -357,8 +402,8 @@ async def hybrid_search(
 
         # Run both searches concurrently for performance
         semantic_results, text_results = await asyncio.gather(
-            semantic_search(ctx, query, fetch_count),
-            text_search(ctx, query, fetch_count),
+            semantic_search(ctx, query, fetch_count, filters=filters),
+            text_search(ctx, query, fetch_count, filters=filters),
             return_exceptions=True  # Don't fail if one search errors
         )
 
@@ -397,6 +442,66 @@ async def hybrid_search(
         # Graceful degradation: try semantic-only as last resort
         try:
             logger.info("Falling back to semantic search only")
-            return await semantic_search(ctx, query, match_count)
+            return await semantic_search(ctx, query, match_count, filters=filters)
         except:
             return []
+
+
+def _build_chunk_filter(filters: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not filters:
+        return None
+
+    allowed = {
+        "source_url": "source_url",
+        "source_type": "source_type",
+        "source_group": "source_group",
+        "user_id": "user_id",
+        "org_id": "org_id",
+    }
+    clauses = []
+    source_mask = filters.get("source_mask") if filters else None
+    if source_mask:
+        clauses.append({"source_mask": {"$bitsAllSet": int(source_mask)}})
+
+    if not source_mask and filters.get("source_type"):
+        type_mask = _source_type_to_mask(filters.get("source_type"))
+        if type_mask:
+            clauses.append({"source_mask": {"$bitsAllSet": type_mask}})
+    for key, field in allowed.items():
+        value = filters.get(key) if filters else None
+        if value and key != "source_type":
+            clauses.append({field: value})
+
+    if not clauses:
+        return None
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
+
+
+def _build_search_filter(filters: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not filters:
+        return []
+
+    allowed = {
+        "source_url": "source_url",
+        "source_type": "source_type",
+        "source_group": "source_group",
+        "user_id": "user_id",
+        "org_id": "org_id",
+    }
+    clauses = []
+    for key, path in allowed.items():
+        value = filters.get(key) if filters else None
+        if value:
+            clauses.append({"equals": {"path": path, "value": value}})
+    return clauses
+
+
+def _source_type_to_mask(source_type: Optional[str]) -> int:
+    mapping = {
+        "web": 1,
+        "gdrive": 2,
+        "upload": 4,
+    }
+    return mapping.get(source_type or "", 0)

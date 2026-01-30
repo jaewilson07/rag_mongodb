@@ -25,6 +25,8 @@ class AgentDependencies:
     session_id: Optional[str] = None
     user_preferences: Dict[str, Any] = field(default_factory=dict)
     query_history: list = field(default_factory=list)
+    last_search_error: Optional[str] = None
+    last_search_error_code: Optional[int] = None
 
     async def initialize(self) -> None:
         """
@@ -37,7 +39,10 @@ class AgentDependencies:
         """
         if not self.settings:
             self.settings = load_settings()
-            logger.info("settings_loaded", database=self.settings.mongodb_database)
+            logger.info(
+                "settings_loaded database=%s",
+                self.settings.mongodb_database,
+            )
 
         # Initialize MongoDB client
         if not self.mongo_client:
@@ -50,15 +55,13 @@ class AgentDependencies:
                 # Verify connection with ping
                 await self.mongo_client.admin.command("ping")
                 logger.info(
-                    "mongodb_connected",
-                    database=self.settings.mongodb_database,
-                    collections={
-                        "documents": self.settings.mongodb_collection_documents,
-                        "chunks": self.settings.mongodb_collection_chunks,
-                    },
+                    "mongodb_connected database=%s documents=%s chunks=%s",
+                    self.settings.mongodb_database,
+                    self.settings.mongodb_collection_documents,
+                    self.settings.mongodb_collection_chunks,
                 )
             except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-                logger.exception("mongodb_connection_failed", error=str(e))
+                logger.exception("mongodb_connection_failed error=%s", str(e))
                 raise
 
         # Initialize OpenAI client for embeddings
@@ -68,9 +71,9 @@ class AgentDependencies:
                 base_url=self.settings.embedding_base_url,
             )
             logger.info(
-                "openai_client_initialized",
-                model=self.settings.embedding_model,
-                dimension=self.settings.embedding_dimension,
+                "openai_client_initialized model=%s dimension=%s",
+                self.settings.embedding_model,
+                self.settings.embedding_dimension,
             )
 
     async def cleanup(self) -> None:
@@ -80,6 +83,10 @@ class AgentDependencies:
             self.mongo_client = None
             self.db = None
             logger.info("mongodb_connection_closed")
+        if self.openai_client:
+            await self.openai_client.close()
+            self.openai_client = None
+            logger.info("openai_client_closed")
 
     async def get_embedding(self, text: str) -> list[float]:
         """

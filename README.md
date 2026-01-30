@@ -16,12 +16,28 @@ Agentic RAG system combining MongoDB Atlas Vector Search with Pydantic AI for in
 ## Prerequisites
 
 - Python 3.10+
-- MongoDB Atlas account (**free M0 tier works perfectly!**)
+- **ONE of the following database options:**
+  - **MongoDB Atlas** account (free M0 tier works perfectly!)
+  - **Docker Desktop** (for self-hosted MongoDB)
 - LLM provider API key (OpenAI, OpenRouter, etc.)
 - Embedding provider API key (OpenAI or OpenRouter recommended)
 - UV package manager
 
 ## Quick Start
+
+Choose your deployment option:
+- [Option A: MongoDB Atlas (Cloud - Recommended)](#option-a-mongodb-atlas-cloud)
+- [Option B: Docker Self-Hosted](#option-b-docker-self-hosted)
+
+---
+
+## Option A: MongoDB Atlas (Cloud)
+
+---
+
+## Option A: MongoDB Atlas (Cloud)
+
+**Best for**: Production deployments, hassle-free setup, automatic scaling
 
 ### 1. Install UV Package Manager
 
@@ -148,6 +164,126 @@ uv run python -m src.cli
 
 Now you can ask questions and the agent will search your knowledge base!
 
+---
+
+## Option B: Docker Self-Hosted
+
+**Best for**: Development, testing, full control over infrastructure
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- LLM and Embedding API keys (OpenAI, OpenRouter, etc.)
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/coleam00/MongoDB-RAG-Agent.git
+cd MongoDB-RAG-Agent
+```
+
+### 2. Configure Environment Variables
+
+```bash
+# Copy the example file
+cp .env.example .env
+```
+
+Edit `.env` and set your API keys:
+```bash
+# LLM Configuration
+LLM_PROVIDER=openrouter
+LLM_API_KEY=your-api-key-here
+LLM_MODEL=anthropic/claude-haiku-4.5
+
+# Embedding Configuration
+EMBEDDING_PROVIDER=openai
+EMBEDDING_API_KEY=your-openai-api-key-here
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+**Note**: MongoDB connection is pre-configured in `docker-compose.yml` - no need to set `MONGODB_URI`.
+
+### 3. Add Your Documents
+
+```bash
+# Add documents to the documents/ folder
+cp /path/to/your/docs/*.pdf ./documents/
+```
+
+### 4. Start the Services
+
+```bash
+# Build and start MongoDB + RAG Agent
+docker-compose up -d
+
+# View logs
+docker-compose logs -f rag-agent
+```
+
+This will:
+1. Start MongoDB Enterprise 8.0 with vector search support
+2. Automatically create vector and text search indexes
+3. Wait for you to ingest documents
+
+### 5. Run Document Ingestion
+
+```bash
+# Inside the Docker container
+docker-compose exec rag-agent python -m src.ingestion.ingest -d ./documents
+```
+
+Or run from host with mounted volumes:
+```bash
+docker-compose exec rag-agent python -m src.ingestion.ingest -d /app/documents
+```
+
+### 6. Start the Interactive Agent
+
+```bash
+docker-compose exec rag-agent python -m src.cli
+```
+
+### Docker Commands Reference
+
+```bash
+# Start services
+docker-compose up -d
+
+# Stop services
+docker-compose down
+
+# View logs
+docker-compose logs -f rag-agent
+docker-compose logs -f mongodb
+
+# Restart services
+docker-compose restart
+
+# Remove all data (including MongoDB volumes)
+docker-compose down -v
+
+# Rebuild after code changes
+docker-compose up -d --build
+```
+
+### Troubleshooting Docker Setup
+
+**Issue**: "Vector search not supported"
+- **Cause**: Using MongoDB Community Edition instead of Enterprise
+- **Solution**: The `docker-compose.yml` uses `mongodb/mongodb-enterprise-server:8.0-ubuntu2204`. Ensure you're using this image.
+- **Alternative**: Use MongoDB Atlas (Option A) which includes these features on the free tier
+
+**Issue**: "Connection refused" or "MongoDB not ready"
+- **Cause**: MongoDB container not fully started
+- **Solution**: Wait 30 seconds for MongoDB to initialize, or check health: `docker-compose ps`
+
+**Issue**: "Indexes not created automatically"
+- **Cause**: MongoDB Enterprise license or feature not available
+- **Solution**: Check logs: `docker-compose logs mongodb`. Consider using MongoDB Atlas for development.
+
+---
+
 ## Project Structure
 
 ```
@@ -182,7 +318,8 @@ MongoDB-RAG-Agent/
 
 ## Technology Stack
 
-- **Database**: MongoDB Atlas (Vector Search + Full-Text Search)
+- **Database**: MongoDB Atlas or MongoDB Enterprise 8.0+ (Vector Search + Full-Text Search)
+- **Deployment**: Docker Compose or Cloud (Atlas)
 - **Agent Framework**: Pydantic AI 0.1.0+
 - **Document Processing**: Docling 2.14+ (PDF, Word, PowerPoint, Excel, Audio)
 - **Async Driver**: PyMongo 4.10+ with native async API

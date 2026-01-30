@@ -1,0 +1,9 @@
+[
+  {
+    "id": "sample-1",
+    "query": "What is the company mission?",
+    "expected_answer": "",
+    "source_group": "documents",
+    "notes": "Fill with canonical answer from mission-and-goals.md"
+  }
+]

@@ -1,7 +1,7 @@
 """Main MongoDB RAG agent implementation with shared state."""
 
 from pydantic_ai import Agent, RunContext
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from pydantic_ai.ag_ui import StateDeps
@@ -14,7 +14,8 @@ from src.tools import semantic_search, hybrid_search, text_search
 
 class RAGState(BaseModel):
     """Minimal shared state for the RAG agent."""
-    pass
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    agent_deps: Optional[AgentDependencies] = None
 
 
 # Create the RAG agent with AGUI support
@@ -45,9 +46,14 @@ async def search_knowledge_base(
         String containing the retrieved information formatted for the LLM
     """
     try:
-        # Initialize database connection
-        agent_deps = AgentDependencies()
-        await agent_deps.initialize()
+        # Initialize or reuse dependencies for the session
+        state = ctx.deps.state
+        if state.agent_deps is None:
+            state.agent_deps = AgentDependencies()
+
+        agent_deps = state.agent_deps
+        if not agent_deps.mongo_client:
+            await agent_deps.initialize()
 
         # Create a context wrapper for the search tools
         class DepsWrapper:
@@ -76,12 +82,14 @@ async def search_knowledge_base(
                 match_count=match_count
             )
 
-        # Clean up
-        await agent_deps.cleanup()
-
         # Format results as a simple string
         if not results:
+            if agent_deps.last_search_error:
+                return f"Search unavailable: {agent_deps.last_search_error}"
             return "No relevant information found in the knowledge base."
+
+        agent_deps.last_search_error = None
+        agent_deps.last_search_error_code = None
 
         # Build a formatted response
         response_parts = [f"Found {len(results)} relevant documents:\n"]

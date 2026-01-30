@@ -1,17 +1,11 @@
 """
-Docling HybridChunker implementation for intelligent document splitting.
+Docling HierarchicalChunker implementation for structure-aware chunking.
 
-This module uses Docling's built-in HybridChunker which combines:
-- Token-aware chunking (uses actual tokenizer)
-- Document structure preservation (headings, sections, tables)
-- Semantic boundary respect (paragraphs, code blocks)
-- Contextualized output (chunks include heading hierarchy)
-
-Benefits over custom chunking:
-- Fast (no LLM API calls)
-- Token-precise (not character-based estimates)
-- Better for RAG (chunks include document context)
-- Battle-tested (maintained by Docling team)
+This module uses Docling's HierarchicalChunker which:
+- Preserves document hierarchy (headings, sections, tables)
+- Respects semantic boundaries (paragraphs, lists)
+- Is token-aware (fits embedding model limits)
+- Provides heading paths for citation context
 """
 
 import os
@@ -21,7 +15,7 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
-from docling.chunking import HybridChunker
+from docling.chunking import HierarchicalChunker
 from docling_core.types.doc import DoclingDocument
 
 # Load environment variables
@@ -65,9 +59,9 @@ class DocumentChunk:
             self.token_count = len(self.content) // 4
 
 
-class DoclingHybridChunker:
+class DoclingHierarchicalChunker:
     """
-    Docling HybridChunker wrapper for intelligent document splitting.
+    Docling HierarchicalChunker wrapper for structure-aware document splitting.
 
     This chunker uses Docling's built-in HybridChunker which:
     - Respects document structure (sections, paragraphs, tables)
@@ -90,14 +84,17 @@ class DoclingHybridChunker:
         logger.info(f"Initializing tokenizer: {model_id}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-        # Create HybridChunker
-        self.chunker = HybridChunker(
+        # Create HierarchicalChunker
+        self.chunker = HierarchicalChunker(
             tokenizer=self.tokenizer,
             max_tokens=config.max_tokens,
-            merge_peers=True  # Merge small adjacent chunks
+            merge_peers=True,
         )
 
-        logger.info(f"HybridChunker initialized (max_tokens={config.max_tokens})")
+        logger.info(
+            "HierarchicalChunker initialized (max_tokens=%s)",
+            config.max_tokens,
+        )
 
     async def chunk_document(
         self,
@@ -108,7 +105,7 @@ class DoclingHybridChunker:
         docling_doc: Optional[DoclingDocument] = None
     ) -> List[DocumentChunk]:
         """
-        Chunk a document using Docling's HybridChunker.
+        Chunk a document using Docling's HierarchicalChunker.
 
         Args:
             content: Document content (markdown format)
@@ -126,7 +123,7 @@ class DoclingHybridChunker:
         base_metadata = {
             "title": title,
             "source": source,
-            "chunk_method": "hybrid",
+            "chunk_method": "hierarchical",
             **(metadata or {})
         }
 
@@ -135,11 +132,13 @@ class DoclingHybridChunker:
             # For markdown content, we need to convert it to DoclingDocument
             # This is a simplified version - in practice, content comes from
             # Docling's document converter in the ingestion pipeline
-            logger.warning("No DoclingDocument provided, using simple chunking fallback")
+            logger.warning(
+                "No DoclingDocument provided, using simple chunking fallback"
+            )
             return self._simple_fallback_chunk(content, base_metadata)
 
         try:
-            # Use HybridChunker to chunk the DoclingDocument
+            # Use HierarchicalChunker to chunk the DoclingDocument
             chunk_iter = self.chunker.chunk(dl_doc=docling_doc)
             chunks = list(chunk_iter)
 
@@ -149,7 +148,18 @@ class DoclingHybridChunker:
 
             for i, chunk in enumerate(chunks):
                 # Get contextualized text (includes heading hierarchy)
-                contextualized_text = self.chunker.contextualize(chunk=chunk)
+                contextualized_text = self._contextualize(chunk)
+
+                heading_path = self._extract_heading_path(chunk)
+                page_number = self._extract_page_number(chunk)
+                is_table = self._extract_is_table(chunk, contextualized_text)
+                summary_context = self._build_summary_context(
+                    title=title,
+                    heading_path=heading_path,
+                )
+                embedding_text = None
+                if is_table:
+                    embedding_text = self._flatten_markdown_table(contextualized_text)
 
                 # Count actual tokens
                 token_count = len(self.tokenizer.encode(contextualized_text))
@@ -159,7 +169,14 @@ class DoclingHybridChunker:
                     **base_metadata,
                     "total_chunks": len(chunks),
                     "token_count": token_count,
-                    "has_context": True  # Flag indicating contextualized chunk
+                    "has_context": True,
+                    "heading_path": heading_path,
+                    "heading_hierarchy": " > ".join(heading_path) if heading_path else None,
+                    "page_number": page_number,
+                    "summary_context": summary_context,
+                    "is_table": is_table,
+                    "raw_text": contextualized_text.strip(),
+                    "embedding_text": embedding_text,
                 }
 
                 # Estimate character positions
@@ -177,12 +194,167 @@ class DoclingHybridChunker:
 
                 current_pos = end_char
 
-            logger.info(f"Created {len(document_chunks)} chunks using HybridChunker")
+            logger.info(
+                "Created %s chunks using HierarchicalChunker",
+                len(document_chunks),
+            )
             return document_chunks
 
         except Exception as e:
-            logger.error(f"HybridChunker failed: {e}, falling back to simple chunking")
+            logger.error(
+                "HierarchicalChunker failed: %s, falling back to simple chunking",
+                e,
+            )
             return self._simple_fallback_chunk(content, base_metadata)
+
+    @staticmethod
+    def _build_summary_context(title: str, heading_path: list[str]) -> str:
+        if heading_path:
+            return f"{title} | {' > '.join(heading_path)}"
+        return title
+
+    def _contextualize(self, chunk: Any) -> str:
+        """Get contextualized text from a Docling chunk."""
+        try:
+            return self.chunker.contextualize(chunk=chunk)
+        except Exception:
+            return getattr(chunk, "text", None) or str(chunk)
+
+    def _extract_heading_path(self, chunk: Any) -> list[str]:
+        """Extract heading path from a Docling chunk."""
+        candidates = []
+        if isinstance(chunk, dict):
+            candidates.extend(
+                [
+                    chunk.get("heading_path"),
+                    chunk.get("heading_hierarchy"),
+                    chunk.get("path"),
+                ]
+            )
+            metadata = chunk.get("metadata") or {}
+            candidates.extend(
+                [
+                    metadata.get("heading_path"),
+                    metadata.get("heading_hierarchy"),
+                ]
+            )
+        else:
+            for attr in (
+                "heading_path",
+                "heading_hierarchy",
+                "path",
+                "headings",
+            ):
+                candidates.append(getattr(chunk, attr, None))
+
+            metadata = getattr(chunk, "metadata", None) or {}
+            if isinstance(metadata, dict):
+                candidates.extend(
+                    [
+                        metadata.get("heading_path"),
+                        metadata.get("heading_hierarchy"),
+                    ]
+                )
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            if isinstance(candidate, str):
+                return [part.strip() for part in candidate.split(">") if part.strip()]
+            if isinstance(candidate, list):
+                return [str(part).strip() for part in candidate if str(part).strip()]
+
+        return []
+
+    def _extract_page_number(self, chunk: Any) -> Optional[int]:
+        """Extract page number from a Docling chunk if present."""
+        if isinstance(chunk, dict):
+            return chunk.get("page_number") or None
+
+        for attr in ("page_number", "page_numbers"):
+            value = getattr(chunk, attr, None)
+            if isinstance(value, list) and value:
+                return value[0]
+            if isinstance(value, int):
+                return value
+
+        metadata = getattr(chunk, "metadata", None) or {}
+        if isinstance(metadata, dict):
+            page_value = metadata.get("page_number")
+            if isinstance(page_value, int):
+                return page_value
+
+        return None
+
+    def _extract_is_table(self, chunk: Any, content: str) -> bool:
+        """Best-effort table detection for metadata tagging."""
+        if isinstance(chunk, dict):
+            value = chunk.get("is_table")
+            if isinstance(value, bool):
+                return value
+            block_type = chunk.get("type") or chunk.get("block_type")
+            if isinstance(block_type, str) and "table" in block_type.lower():
+                return True
+            metadata = chunk.get("metadata") or {}
+            value = metadata.get("is_table")
+            if isinstance(value, bool):
+                return value
+
+        for attr in ("is_table", "block_type", "type"):
+            value = getattr(chunk, attr, None)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str) and "table" in value.lower():
+                return True
+
+        metadata = getattr(chunk, "metadata", None) or {}
+        if isinstance(metadata, dict):
+            value = metadata.get("is_table")
+            if isinstance(value, bool):
+                return value
+
+        # Markdown table heuristic
+        if "|" in content and "---" in content:
+            return True
+
+        return False
+
+    @staticmethod
+    def _flatten_markdown_table(content: str) -> str:
+        """Convert markdown tables into row-wise sentences for embeddings."""
+        lines = [line.strip() for line in content.split("\n") if line.strip()]
+        if len(lines) < 2:
+            return content
+
+        header = None
+        rows: list[list[str]] = []
+        for i, line in enumerate(lines):
+            if "|" not in line:
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if header is None and i + 1 < len(lines):
+                separator = lines[i + 1]
+                if "---" in separator:
+                    header = cells
+                    continue
+            if header is not None:
+                if line == lines[i - 1]:
+                    continue
+                rows.append(cells)
+
+        if not header or not rows:
+            return content
+
+        sentences = []
+        for row in rows:
+            pairs = []
+            for col, value in zip(header, row):
+                if col and value:
+                    pairs.append(f"{col}: {value}")
+            if pairs:
+                sentences.append("; ".join(pairs))
+
+        return "\n".join(sentences) if sentences else content
 
     def _simple_fallback_chunk(
         self,
@@ -229,6 +401,14 @@ class DoclingHybridChunker:
 
             if chunk_text.strip():
                 token_count = len(self.tokenizer.encode(chunk_text))
+                summary_context = self._build_summary_context(
+                    title=base_metadata.get("title", ""),
+                    heading_path=[],
+                )
+                is_table = self._extract_is_table({}, chunk_text)
+                embedding_text = (
+                    self._flatten_markdown_table(chunk_text) if is_table else None
+                )
 
                 chunks.append(DocumentChunk(
                     content=chunk_text.strip(),
@@ -238,7 +418,11 @@ class DoclingHybridChunker:
                     metadata={
                         **base_metadata,
                         "chunk_method": "simple_fallback",
-                        "total_chunks": -1  # Will update after
+                        "total_chunks": -1,  # Will update after
+                        "summary_context": summary_context,
+                        "is_table": is_table,
+                        "raw_text": chunk_text.strip(),
+                        "embedding_text": embedding_text,
                     },
                     token_count=token_count
                 ))
@@ -257,13 +441,5 @@ class DoclingHybridChunker:
 
 
 def create_chunker(config: ChunkingConfig):
-    """
-    Create DoclingHybridChunker for intelligent document splitting.
-
-    Args:
-        config: Chunking configuration
-
-    Returns:
-        DoclingHybridChunker instance
-    """
-    return DoclingHybridChunker(config)
+    """Create DoclingHierarchicalChunker for structure-aware splitting."""
+    return DoclingHierarchicalChunker(config)

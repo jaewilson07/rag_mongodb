@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 # Import our agent and dependencies
 from src.agent import rag_agent, RAGState
+from src.logging_config import configure_logging
 from src.settings import load_settings
 
 # Load environment variables
@@ -177,6 +178,7 @@ def display_welcome():
 
 async def main():
     """Main conversation loop."""
+    configure_logging()
 
     # Show welcome
     display_welcome()
