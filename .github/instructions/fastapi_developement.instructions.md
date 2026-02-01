@@ -3,7 +3,7 @@ name: fastapi-development
 description: Guide FastAPI development with testing, coverage, and design patterns. Use when building FastAPI endpoints, writing tests, configuring pytest, setting up coverage, creating dependency injection patterns, or when the user asks about API testing strategies.
 ---
 
-reference [Microservices Design Patterns](microservices-design.md) for API design conventions.
+reference [Microservices Design Patterns](fastapi-development/microservices-design.md) for API design conventions.
 
 # FastAPI Development
 
@@ -462,7 +462,7 @@ def test_app(mock_user):
 
 ## Coverage Configuration
 
-See [coverage-config.md](coverage-config.md) for detailed `.coveragerc` and pytest-cov setup.
+See [pyproject.toml](../../pyproject.toml) for pytest and coverage configuration.
 
 ### Quick Coverage Command
 
@@ -844,6 +844,6 @@ class ItemResponse(BaseModel):
 
 ## Additional Resources
 
-- [testing-patterns.md](testing-patterns.md) - Detailed fixture patterns and examples
-- [coverage-config.md](coverage-config.md) - Coverage configuration templates
-- [microservices-design.md](microservices-design.md) - API endpoint design conventions
+- [sample/AGENTS.md](../../sample/AGENTS.md) - Sample script guidance and patterns
+- [pyproject.toml](../../pyproject.toml) - Pytest and coverage configuration
+- [fastapi-development/microservices-design.md](fastapi-development/microservices-design.md) - API endpoint design conventions

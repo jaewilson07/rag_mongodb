@@ -2,14 +2,22 @@
 
 import asyncio
 import logging
-from typing import Optional, List, Dict, Any
-from pydantic_ai import RunContext
+from typing import Optional, List, Dict, Any, Protocol
+
+import httpx
 from pydantic import BaseModel, Field
 from pymongo.errors import OperationFailure
 
-from src.dependencies import AgentDependencies
+from mdrag.dependencies import AgentDependencies
+from mdrag.settings import load_settings
 
 logger = logging.getLogger(__name__)
+
+
+class HasDeps(Protocol):
+    """Protocol for context objects that expose dependencies."""
+
+    deps: AgentDependencies
 
 
 class SearchResult(BaseModel):
@@ -24,8 +32,18 @@ class SearchResult(BaseModel):
     document_source: str = Field(..., description="Source from document lookup")
 
 
+class WebSearchResult(BaseModel):
+    """Model for web search results."""
+
+    title: str
+    url: str
+    content: str
+    engine: str | None = None
+    score: float | None = None
+
+
 async def semantic_search(
-    ctx: RunContext[AgentDependencies],
+    ctx: HasDeps,
     query: str,
     match_count: Optional[int] = None,
     filters: Optional[Dict[str, Any]] = None,
@@ -148,7 +166,7 @@ async def semantic_search(
 
 
 async def text_search(
-    ctx: RunContext[AgentDependencies],
+    ctx: HasDeps,
     query: str,
     match_count: Optional[int] = None,
     filters: Optional[Dict[str, Any]] = None,
@@ -283,6 +301,72 @@ async def text_search(
         return []
 
 
+async def searxng_search(
+    ctx: HasDeps,
+    query: str,
+    result_count: int = 5,
+    categories: str | None = None,
+    engines: list[str] | None = None,
+) -> List[WebSearchResult]:
+    """Search the web via SearXNG."""
+    deps = ctx.deps
+    if not deps.settings:
+        deps.settings = load_settings()
+
+    base_url = (deps.settings.searxng_url or "").rstrip("/")
+    if not base_url:
+        return []
+
+    params: Dict[str, Any] = {
+        "q": query.strip(),
+        "format": "json",
+        "pageno": 1,
+    }
+    if categories:
+        params["categories"] = categories
+    if engines:
+        params["engines"] = ",".join(engines)
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{base_url}/search", params=params)
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPError as exc:
+        logger.warning("searxng_search_failed: %s", str(exc))
+        return []
+
+    results: List[WebSearchResult] = []
+    for item in (data.get("results") or [])[: max(1, min(result_count, 20))]:
+        results.append(
+            WebSearchResult(
+                title=item.get("title", ""),
+                url=item.get("url", ""),
+                content=item.get("content", ""),
+                engine=item.get("engine"),
+                score=item.get("score"),
+            )
+        )
+
+    return results
+
+
+def format_web_search_results(results: List[WebSearchResult]) -> str:
+    """Format web search results for LLM consumption."""
+    if not results:
+        return "No relevant web results found."
+
+    lines = ["Web search results:"]
+    for idx, result in enumerate(results, start=1):
+        snippet = result.content.strip() if result.content else "(no snippet)"
+        lines.append(
+            f"{idx}. {result.title}\n"
+            f"   URL: {result.url}\n"
+            f"   Snippet: {snippet}"
+        )
+    return "\n".join(lines)
+
+
 def reciprocal_rank_fusion(
     search_results_list: List[List[SearchResult]],
     k: int = 60
@@ -358,7 +442,7 @@ def reciprocal_rank_fusion(
 
 
 async def hybrid_search(
-    ctx: RunContext[AgentDependencies],
+    ctx: HasDeps,
     query: str,
     match_count: Optional[int] = None,
     text_weight: Optional[float] = None,
@@ -443,7 +527,12 @@ async def hybrid_search(
         try:
             logger.info("Falling back to semantic search only")
             return await semantic_search(ctx, query, match_count, filters=filters)
-        except:
+        except Exception as fallback_error:
+            logger.exception(
+                "semantic_search_fallback_failed: query=%s, error=%s",
+                query,
+                str(fallback_error),
+            )
             return []
 
 

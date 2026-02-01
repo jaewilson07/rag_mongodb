@@ -1,0 +1,14 @@
+# SearXNG local settings override
+# See: https://docs.searxng.org/admin/settings/settings.html
+
+use_default_settings: true
+
+server:
+  secret_key: "b1dcb6d3f4e24a8a8b9b3b1e3b75f0d4"
+  limiter: false
+  public_instance: false
+
+search:
+  formats:
+    - html
+    - json

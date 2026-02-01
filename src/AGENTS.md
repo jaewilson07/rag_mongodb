@@ -19,6 +19,37 @@
 - prompts.py - system prompts
 - cli.py - streaming CLI
 
+### Folder Map (src)
+
+```mermaid
+flowchart TB
+  src_root[src/]
+  src_root --> agent_py[agent.py]
+  src_root --> tools_py[tools.py]
+  src_root --> dependencies_py[dependencies.py]
+  src_root --> settings_py[settings.py]
+  src_root --> providers_py[providers.py]
+  src_root --> prompts_py[prompts.py]
+  src_root --> cli_py[cli.py]
+  src_root --> ingestion[src/ingestion/]
+  src_root --> integrations[src/integrations/]
+  src_root --> retrieval[src/retrieval/]
+  src_root --> server[src/server/]
+  src_root --> logging[src/logging/]
+  src_root --> observability[src/observability/ - LangSmith tracing]
+  src_root --> logging_config[logging_config.py]
+  src_root --> query_py[query.py]
+  src_root --> test_config_py[test_config.py]
+```
+
+**Folder responsibilities**
+- ingestion/ - document conversion, chunking, embeddings, ingestion pipeline.
+- integrations/ - external service clients (Crawl4AI, Google Drive/Docs, SearXNG).
+- retrieval/ - vector store + embeddings utilities for retrieval flows.
+- server/ - FastAPI app and API wiring.
+- logging/ - structured logging helpers and context utilities.
+- observability/ - PII handling + tracing utilities (LangSmith).
+
 ### Code Examples
 
 ✅ DO: Initialize and ping MongoDB in AgentDependencies
@@ -58,7 +89,8 @@
 - Integration: Run CLI with live MongoDB + embeddings
 
 ### Test Locations
-- test_scripts/ (integration and E2E checks)
+- sample/ (integration and E2E checks)
+- tests/ (pytest checks)
 
 ## Component Gotchas
 
@@ -67,3 +99,4 @@
 3. Match count must respect settings.max_match_count.
 4. Manual RRF is in src/tools.py; do not assume $rankFusion.
 5. Reuse `AgentDependencies` via `StateDeps`; avoid per-call client creation.
+6. Integration exports must return `Source` with `SourceFrontmatter` (see src/integrations/models.py).

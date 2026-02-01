@@ -217,6 +217,12 @@ cp /path/to/your/docs/*.pdf ./documents/
 # Build and start MongoDB + RAG Agent
 docker-compose up -d
 
+# If you need $search / $vectorSearch locally, start the search stack (includes mongot)
+docker-compose -f docker-compose-search.yml up -d
+
+# Optional helper script (starts docker-compose.yml; add --search for docker-compose-search.yml)
+python start_services.py
+
 # View logs
 docker-compose logs -f rag-agent
 ```
@@ -225,6 +231,11 @@ This will:
 1. Start MongoDB Enterprise 8.0 with vector search support
 2. Automatically create vector and text search indexes
 3. Wait for you to ingest documents
+
+**Port conventions (host → container):**
+- MongoDB: 7017 → 27017
+- Mongot (Atlas Search, if using docker-compose-search.yml): 7027 → 27027
+- SearXNG: 7080 → 8080
 
 ### 5. Run Document Ingestion
 
@@ -250,6 +261,9 @@ docker-compose exec rag-agent python -m src.cli
 # Start services
 docker-compose up -d
 
+# Start search stack (MongoDB + mongot + SearXNG)
+docker-compose -f docker-compose-search.yml up -d
+
 # Stop services
 docker-compose down
 
@@ -268,6 +282,12 @@ docker-compose up -d --build
 ```
 
 ### Troubleshooting Docker Setup
+
+**Issue**: `SearchNotEnabled` / `code=31082` when running search
+- **Cause**: `$search` and `$vectorSearch` require Atlas Search (cloud) or a local `mongot` sidecar.
+- **Solution**:
+  - **Atlas**: Use Option A and create the `vector_index` and `text_index` in Atlas UI.
+  - **Docker**: Start the search stack with `docker-compose -f docker-compose-search.yml up -d`.
 
 **Issue**: "Vector search not supported"
 - **Cause**: Using MongoDB Community Edition instead of Enterprise
@@ -298,21 +318,29 @@ MongoDB-RAG-Agent/
 │   ├── cli.py                    # ✅ Rich-based conversational CLI
 │   ├── prompts.py                # ✅ System prompts
 │   └── ingestion/
-│       ├── chunker.py            # ✅ Docling HybridChunker wrapper
-│       ├── embedder.py           # ✅ Batch embedding generation
-│       └── ingest.py             # ✅ MongoDB ingestion pipeline
+│       ├── docling/
+│       │   ├── chunker.py         # ✅ Docling HybridChunker wrapper
+│       │   └── processor.py       # ✅ Docling document conversion
+│       ├── embedder.py            # ✅ Batch embedding generation
+│       └── ingest.py              # ✅ MongoDB ingestion pipeline
+├── server/                         # Maintenance scripts
+│   └── maintenance/
+│       └── init_indexes.py         # Index initialization (Docker/self-hosted)
 ├── examples/                      # PostgreSQL reference (DO NOT MODIFY)
 │   ├── agent.py                  # Reference: Pydantic AI agent patterns
 │   ├── tools.py                  # Reference: PostgreSQL search tools
 │   └── cli.py                    # Reference: Rich CLI interface
+├── sample/                         # Validation and example scripts
+│   ├── rag/                        # Agent E2E checks
+│   ├── retrieval/                  # Search/pipeline validation
+│   ├── ingestion/                  # Ingestion validation utilities
+│   ├── mongodb/                    # Cluster/index inspection
+│   └── eval/                       # Gold dataset evaluation
+├── tests/                          # Pytest checks
 ├── documents/                     # Document folder (13 sample documents included)
 ├── .claude/                       # Project documentation
 │   ├── PRD.md                    # Product requirements
 │   └── reference/                # MongoDB/Docling/Agent patterns
-├── .agents/
-│   ├── plans/                    # Implementation plans (all phases)
-│   └── analysis/                 # Technical analysis & decisions
-├── comprehensive_e2e_test.py      # ✅ Full E2E validation (10/10 passed)
 └── pyproject.toml                # UV package configuration
 ```
 

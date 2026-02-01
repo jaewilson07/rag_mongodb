@@ -9,19 +9,48 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from pydantic_ai import Agent
-from pydantic_ai.messages import PartDeltaEvent, PartStartEvent, TextPartDelta
+from pydantic_ai.messages import (
+    FunctionToolCallEvent,
+    FunctionToolResultEvent,
+    PartDeltaEvent,
+    PartStartEvent,
+    TextPartDelta,
+)
 from pydantic_ai.ag_ui import StateDeps
 from dotenv import load_dotenv
 
 # Import our agent and dependencies
-from src.agent import rag_agent, RAGState
-from src.logging_config import configure_logging
-from src.settings import load_settings
+try:
+    from .agent import rag_agent, RAGState
+    from .dependencies import AgentDependencies
+    from .logging_config import configure_logging
+    from .settings import load_settings
+except ImportError:  # Allow running as a script without module context
+    import sys
+    from pathlib import Path
+
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from src.agent import rag_agent, RAGState
+    from src.dependencies import AgentDependencies
+    from src.logging_config import configure_logging
+    from src.settings import load_settings
 
 # Load environment variables
 load_dotenv(override=True)
 
 console = Console()
+
+
+async def ensure_services_ready() -> None:
+    """Fail fast if required services are unavailable."""
+    deps = AgentDependencies()
+    try:
+        await deps.initialize()
+    finally:
+        await deps.cleanup()
 
 
 async def stream_agent_interaction(
@@ -101,30 +130,10 @@ async def _stream_agent(
                 # Stream tool execution events
                 async with node.stream(run.ctx) as tool_stream:
                     async for event in tool_stream:
-                        event_type = type(event).__name__
-
-                        if event_type == "FunctionToolCallEvent":
+                        if isinstance(event, FunctionToolCallEvent):
                             # Extract tool name from the event
-                            tool_name = "Unknown Tool"
-                            args = None
-
-                            # Check if the part attribute contains the tool call
-                            if hasattr(event, 'part'):
-                                part = event.part
-
-                                # Check for tool name
-                                if hasattr(part, 'tool_name'):
-                                    tool_name = part.tool_name
-                                elif hasattr(part, 'function_name'):
-                                    tool_name = part.function_name
-                                elif hasattr(part, 'name'):
-                                    tool_name = part.name
-
-                                # Check for arguments
-                                if hasattr(part, 'args'):
-                                    args = part.args
-                                elif hasattr(part, 'arguments'):
-                                    args = part.arguments
+                            tool_name = event.part.tool_name
+                            args = event.part.args
 
                             console.print(f"  [cyan]Calling tool:[/cyan] [bold]{tool_name}[/bold]")
 
@@ -141,19 +150,21 @@ async def _stream_agent(
                                 if len(args_str) > 100:
                                     args_str = args_str[:97] + "..."
                                 console.print(f"    [dim]Args: {args_str}[/dim]")
-
-                        elif event_type == "FunctionToolResultEvent":
-                            console.print(f"  [green]Search completed successfully[/green]")
+                        elif isinstance(event, FunctionToolResultEvent):
+                            console.print("  [green]Tool completed successfully[/green]")
 
             # Handle end node
             elif Agent.is_end_node(node):
                 pass
 
     # Get new messages from this run to add to history
+    if run.result is None:
+        return (response_text.strip(), [])
+
     new_messages = run.result.new_messages()
 
     # Get final output
-    final_output = run.result.output if hasattr(run.result, 'output') else str(run.result)
+    final_output = run.result.output if hasattr(run.result, "output") else str(run.result)
     response = response_text.strip() or final_output
 
     # Return both streamed text and new messages
@@ -179,6 +190,16 @@ def display_welcome():
 async def main():
     """Main conversation loop."""
     configure_logging()
+
+    try:
+        await ensure_services_ready()
+    except Exception as e:
+        console.print(
+            "[red]Service health check failed. "
+            "Verify MONGODB_URI and ensure MongoDB is reachable.[/red]"
+        )
+        console.print(f"[dim]{e}[/dim]")
+        raise SystemExit(1)
 
     # Show welcome
     display_welcome()

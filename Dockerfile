@@ -36,9 +36,7 @@ WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
 # Copy application code
-COPY --chown=app:app src/ ./src/
-COPY --chown=app:app examples/ ./examples/
-COPY --chown=app:app documents/ ./documents/
+COPY --chown=app:app data/ ./data/
 
 # Set Python path to use virtual environment
 ENV PATH="/app/.venv/bin:$PATH"

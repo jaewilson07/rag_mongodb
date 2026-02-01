@@ -5,6 +5,8 @@ venv/
 ENV/
 env/
 
+/sample/**/EXPORTS/**
+
 # Python
 __pycache__/
 *.py[cod]

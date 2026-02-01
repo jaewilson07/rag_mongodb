@@ -7,28 +7,33 @@ changing only the database layer while preserving all document processing logic.
 
 import os
 import asyncio
-import logging
 import glob
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import argparse
 from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
 
 from pymongo import AsyncMongoClient
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, DocumentTooLarge
 from dotenv import load_dotenv
 
-from src.ingestion.chunker import ChunkingConfig, create_chunker, DocumentChunk
-from src.ingestion.google_drive import parse_csv_values
-from src.ingestion.processor import DocumentProcessor
-from src.ingestion.embedder import create_embedder
-from src.logging_config import configure_logging
-from src.settings import load_settings
+from mdrag.ingestion.docling.chunker import (
+    ChunkingConfig,
+    DoclingChunks,
+    create_chunker,
+)
+from mdrag.integrations.google_drive import parse_csv_values
+from mdrag.ingestion.docling.processor import DocumentProcessor, ProcessedDocument
+from mdrag.ingestion.embedder import create_embedder
+from mdrag.mdrag_logging.service_logging import get_logger, log_async, setup_logging
+from mdrag.settings import load_settings
 
 # Load environment variables
 load_dotenv()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -52,6 +57,27 @@ class IngestionResult:
 
 class DocumentIngestionPipeline:
     """Pipeline for ingesting documents into MongoDB vector database."""
+
+    @staticmethod
+    def _sanitize_for_mongo(value: Any) -> Any:
+        """Ensure values are compatible with MongoDB BSON encoding."""
+        if isinstance(value, bool) or value is None:
+            return value
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, Enum):
+            return value.value
+        if isinstance(value, int):
+            min_int64 = -(2**63)
+            max_int64 = 2**63 - 1
+            if value < min_int64 or value > max_int64:
+                return str(value)
+            return value
+        if isinstance(value, dict):
+            return {k: DocumentIngestionPipeline._sanitize_for_mongo(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [DocumentIngestionPipeline._sanitize_for_mongo(v) for v in value]
+        return value
 
     def __init__(
         self,
@@ -103,7 +129,7 @@ class DocumentIngestionPipeline:
         if self._initialized:
             return
 
-        logger.info("Initializing ingestion pipeline...")
+        await logger.info("ingestion_pipeline_initialize_start", action="ingestion_pipeline_initialize_start")
 
         try:
             # Initialize MongoDB client
@@ -115,16 +141,23 @@ class DocumentIngestionPipeline:
 
             # Verify connection
             await self.mongo_client.admin.command("ping")
-            logger.info(
-                f"Connected to MongoDB database: {self.settings.mongodb_database}"
+            await logger.info(
+                "mongodb_connection_ready",
+                action="mongodb_connection_ready",
+                database=self.settings.mongodb_database,
             )
 
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-            logger.exception("mongodb_connection_failed", error=str(e))
+            await logger.error(
+                "mongodb_connection_failed",
+                action="mongodb_connection_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             raise
 
         self._initialized = True
-        logger.info("Ingestion pipeline initialized")
+        await logger.info("ingestion_pipeline_initialized", action="ingestion_pipeline_initialized")
 
     async def close(self) -> None:
         """Close MongoDB connections."""
@@ -133,7 +166,7 @@ class DocumentIngestionPipeline:
             self.mongo_client = None
             self.db = None
             self._initialized = False
-            logger.info("MongoDB connection closed")
+            await logger.info("mongodb_connection_closed", action="mongodb_connection_closed")
 
     def _find_document_files(self) -> List[str]:
         """
@@ -143,7 +176,13 @@ class DocumentIngestionPipeline:
             List of file paths
         """
         if not os.path.exists(self.documents_folder):
-            logger.error(f"Documents folder not found: {self.documents_folder}")
+            log_async(
+                logger,
+                "error",
+                "documents_folder_not_found",
+                action="documents_folder_not_found",
+                documents_folder=self.documents_folder,
+            )
             return []
 
         # Supported file patterns - Docling + text formats + audio
@@ -173,7 +212,7 @@ class DocumentIngestionPipeline:
         title: str,
         source_url: str,
         content: str,
-        chunks: List[DocumentChunk],
+        chunks: List[DoclingChunks],
         metadata: Dict[str, Any],
         content_hash: str,
         docling_json: Optional[Dict[str, Any]] = None,
@@ -223,20 +262,59 @@ class DocumentIngestionPipeline:
             "updated_at": datetime.now(),
             "created_at": datetime.now(),
         }
+        document_dict = self._sanitize_for_mongo(document_dict)
 
         existing = await documents_collection.find_one({"content_hash": content_hash})
-        if existing:
-            document_id = existing["_id"]
-            await documents_collection.update_one(
-                {"_id": document_id},
-                {"$set": {**document_dict, "updated_at": datetime.now()}},
+        try:
+            if existing:
+                document_id = existing["_id"]
+                await documents_collection.update_one(
+                    {"_id": document_id},
+                    {"$set": {**document_dict, "updated_at": datetime.now()}},
+                )
+                await chunks_collection.delete_many({"document_id": document_id})
+                await logger.info(
+                    "mongodb_document_updated",
+                    action="mongodb_document_updated",
+                    document_id=str(document_id),
+                )
+            else:
+                document_result = await documents_collection.insert_one(document_dict)
+                document_id = document_result.inserted_id
+                await logger.info(
+                    "mongodb_document_inserted",
+                    action="mongodb_document_inserted",
+                    document_id=str(document_id),
+                )
+        except DocumentTooLarge:
+            await logger.warning(
+                "mongodb_document_too_large",
+                action="mongodb_document_too_large",
+                title=title,
             )
-            await chunks_collection.delete_many({"document_id": document_id})
-            logger.info("Updated document with ID: %s", document_id)
-        else:
-            document_result = await documents_collection.insert_one(document_dict)
-            document_id = document_result.inserted_id
-            logger.info("Inserted document with ID: %s", document_id)
+            document_dict["docling_json"] = {}
+            document_dict["page_texts"] = {}
+            document_dict = self._sanitize_for_mongo(document_dict)
+            if existing:
+                document_id = existing["_id"]
+                await documents_collection.update_one(
+                    {"_id": document_id},
+                    {"$set": {**document_dict, "updated_at": datetime.now()}},
+                )
+                await chunks_collection.delete_many({"document_id": document_id})
+                await logger.info(
+                    "mongodb_document_updated",
+                    action="mongodb_document_updated",
+                    document_id=str(document_id),
+                )
+            else:
+                document_result = await documents_collection.insert_one(document_dict)
+                document_id = document_result.inserted_id
+                await logger.info(
+                    "mongodb_document_inserted",
+                    action="mongodb_document_inserted",
+                    document_id=str(document_id),
+                )
 
         # Insert chunks with embeddings as Python lists
         chunk_dicts = []
@@ -263,18 +341,25 @@ class DocumentIngestionPipeline:
                 "content_hash": content_hash,
                 "created_at": datetime.now()
             }
-            chunk_dicts.append(chunk_dict)
+            chunk_dicts.append(self._sanitize_for_mongo(chunk_dict))
 
         # Batch insert with ordered=False for partial success
         if chunk_dicts:
             await chunks_collection.insert_many(chunk_dicts, ordered=False)
-            logger.info(f"Inserted {len(chunk_dicts)} chunks")
+            await logger.info(
+                "mongodb_chunks_inserted",
+                action="mongodb_chunks_inserted",
+                chunk_count=len(chunk_dicts),
+            )
 
         return str(document_id)
 
     async def _clean_databases(self) -> None:
         """Clean existing data from MongoDB collections."""
-        logger.warning("Cleaning existing data from MongoDB...")
+        await logger.warning(
+            "mongodb_cleanup_start",
+            action="mongodb_cleanup_start",
+        )
 
         # Get collection references
         documents_collection = self.db[
@@ -284,11 +369,19 @@ class DocumentIngestionPipeline:
 
         # Delete all chunks first (to respect FK relationships)
         chunks_result = await chunks_collection.delete_many({})
-        logger.info(f"Deleted {chunks_result.deleted_count} chunks")
+        await logger.info(
+            "mongodb_chunks_deleted",
+            action="mongodb_chunks_deleted",
+            deleted_count=chunks_result.deleted_count,
+        )
 
         # Delete all documents
         docs_result = await documents_collection.delete_many({})
-        logger.info(f"Deleted {docs_result.deleted_count} documents")
+        await logger.info(
+            "mongodb_documents_deleted",
+            action="mongodb_documents_deleted",
+            deleted_count=docs_result.deleted_count,
+        )
 
     @staticmethod
     def _build_chunk_metadata(
@@ -360,7 +453,12 @@ class DocumentIngestionPipeline:
         """
         start_time = datetime.now()
 
-        logger.info(f"Processing document: {title}")
+        await logger.info(
+            "document_processing_start",
+            action="document_processing_start",
+            title=title,
+            source_url=source_url,
+        )
 
         chunks = await self.chunker.chunk_document(
             content=content,
@@ -371,7 +469,12 @@ class DocumentIngestionPipeline:
         )
 
         if not chunks:
-            logger.warning(f"No chunks created for {title}")
+            await logger.warning(
+                "document_no_chunks",
+                action="document_no_chunks",
+                title=title,
+                source_url=source_url,
+            )
             return IngestionResult(
                 document_id="",
                 title=title,
@@ -382,10 +485,20 @@ class DocumentIngestionPipeline:
                 errors=["No chunks created"],
             )
 
-        logger.info(f"Created {len(chunks)} chunks")
+        await logger.info(
+            "document_chunks_created",
+            action="document_chunks_created",
+            title=title,
+            chunk_count=len(chunks),
+        )
 
         embedded_chunks = await self.embedder.embed_chunks(chunks)
-        logger.info(f"Generated embeddings for {len(embedded_chunks)} chunks")
+        await logger.info(
+            "document_embeddings_generated",
+            action="document_embeddings_generated",
+            title=title,
+            chunk_count=len(embedded_chunks),
+        )
 
         document_id = await self._save_to_mongodb(
             title,
@@ -398,7 +511,12 @@ class DocumentIngestionPipeline:
             page_texts=page_texts,
         )
 
-        logger.info(f"Saved document to MongoDB with ID: {document_id}")
+        await logger.info(
+            "document_saved",
+            action="document_saved",
+            document_id=document_id,
+            title=title,
+        )
 
         processing_time = (
             datetime.now() - start_time
@@ -442,6 +560,36 @@ class DocumentIngestionPipeline:
             content_hash=processed.content_hash,
         )
 
+    async def _ingest_processed_document(
+        self,
+        processed: ProcessedDocument,
+        namespace: Optional[Dict[str, Any]] = None,
+    ) -> IngestionResult:
+        """
+        Ingest a pre-processed Docling document payload.
+
+        Args:
+            processed: ProcessedDocument from an IngestionSource
+            namespace: Optional namespace overrides
+
+        Returns:
+            Ingestion result
+        """
+        metadata = dict(processed.metadata)
+        if namespace:
+            metadata.update(namespace)
+
+        return await self._ingest_document_content(
+            content=processed.content,
+            title=processed.title,
+            source_url=processed.source_url,
+            metadata=metadata,
+            docling_doc=processed.docling_document,
+            docling_json=processed.docling_json,
+            page_texts=processed.page_texts,
+            content_hash=processed.content_hash,
+        )
+
     async def _ingest_crawl4ai(
         self,
         urls: List[str],
@@ -478,7 +626,13 @@ class DocumentIngestionPipeline:
                     )
 
             except Exception as exc:
-                logger.exception(f"Failed to crawl {url}: {exc}")
+                await logger.error(
+                    "crawl4ai_ingest_failed",
+                    action="crawl4ai_ingest_failed",
+                    url=url,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
                 results.append(
                     IngestionResult(
                         document_id="",
@@ -503,7 +657,10 @@ class DocumentIngestionPipeline:
             return []
 
         if not self.settings.google_service_account_file:
-            logger.warning("Google service account file not configured")
+            await logger.warning(
+                "gdrive_service_account_missing",
+                action="gdrive_service_account_missing",
+            )
             return []
 
         results: List[IngestionResult] = []
@@ -516,7 +673,13 @@ class DocumentIngestionPipeline:
                 )
                 gathered_file_ids.extend([file["id"] for file in files])
             except Exception as exc:
-                logger.exception(f"Failed to list folder {folder_id}: {exc}")
+                await logger.error(
+                    "gdrive_folder_list_failed",
+                    action="gdrive_folder_list_failed",
+                    folder_id=folder_id,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
 
         gathered_file_ids.extend(doc_ids)
         seen: set[str] = set()
@@ -544,7 +707,13 @@ class DocumentIngestionPipeline:
                 )
 
             except Exception as exc:
-                logger.exception(f"Failed to ingest Google file {file_id}: {exc}")
+                await logger.error(
+                    "gdrive_file_ingest_failed",
+                    action="gdrive_file_ingest_failed",
+                    file_id=file_id,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
                 results.append(
                     IngestionResult(
                         document_id="",
@@ -613,18 +782,28 @@ class DocumentIngestionPipeline:
         document_files = self._find_document_files()
 
         if not document_files and not results:
-            logger.warning(
-                f"No supported document files found in {self.documents_folder}"
+            await logger.warning(
+                "documents_folder_empty",
+                action="documents_folder_empty",
+                documents_folder=self.documents_folder,
             )
             return []
 
         if document_files:
-            logger.info(f"Found {len(document_files)} document files to process")
+            await logger.info(
+                "documents_discovered",
+                action="documents_discovered",
+                document_count=len(document_files),
+            )
 
             for i, file_path in enumerate(document_files):
                 try:
-                    logger.info(
-                        f"Processing file {i+1}/{len(document_files)}: {file_path}"
+                    await logger.info(
+                        "document_file_processing_start",
+                        action="document_file_processing_start",
+                        index=i + 1,
+                        total=len(document_files),
+                        file_path=file_path,
                     )
 
                     result = await self._ingest_single_document(file_path)
@@ -634,7 +813,13 @@ class DocumentIngestionPipeline:
                         progress_callback(i + 1, len(document_files))
 
                 except Exception as e:
-                    logger.exception(f"Failed to process {file_path}: {e}")
+                    await logger.error(
+                        "document_file_processing_failed",
+                        action="document_file_processing_failed",
+                        file_path=file_path,
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
                     results.append(IngestionResult(
                         document_id="",
                         title=os.path.basename(file_path),
@@ -647,9 +832,12 @@ class DocumentIngestionPipeline:
         total_chunks = sum(r.chunks_created for r in results)
         total_errors = sum(len(r.errors) for r in results)
 
-        logger.info(
-            f"Ingestion complete: {len(results)} documents, "
-            f"{total_chunks} chunks, {total_errors} errors"
+        await logger.info(
+            "ingestion_complete",
+            action="ingestion_complete",
+            document_count=len(results),
+            chunk_count=total_chunks,
+            error_count=total_errors,
         )
 
         return results
@@ -733,7 +921,7 @@ async def main() -> None:
 
     # Configure logging
     log_level = "DEBUG" if args.verbose else None
-    configure_logging(log_level)
+    await setup_logging(log_level=log_level or "INFO")
 
     # Create ingestion configuration
     config = IngestionConfig(
@@ -765,7 +953,14 @@ async def main() -> None:
     )
 
     def progress_callback(current: int, total: int) -> None:
-        print(f"Progress: {current}/{total} documents processed")
+        log_async(
+            logger,
+            "info",
+            "ingestion_progress",
+            action="ingestion_progress",
+            current=current,
+            total=total,
+        )
 
     try:
         start_time = datetime.now()
@@ -783,46 +978,53 @@ async def main() -> None:
         end_time = datetime.now()
         total_time = (end_time - start_time).total_seconds()
 
-        # Print summary
-        print("\n" + "="*50)
-        print("INGESTION SUMMARY")
-        print("="*50)
-        print(f"Documents processed: {len(results)}")
-        print(f"Total chunks created: {sum(r.chunks_created for r in results)}")
-        print(f"Total errors: {sum(len(r.errors) for r in results)}")
-        print(f"Total processing time: {total_time:.2f} seconds")
-        print()
+        total_chunks = sum(r.chunks_created for r in results)
+        total_errors = sum(len(r.errors) for r in results)
 
-        # Print individual results
+        await logger.info(
+            "ingestion_summary",
+            action="ingestion_summary",
+            documents_processed=len(results),
+            total_chunks=total_chunks,
+            total_errors=total_errors,
+            total_processing_time_seconds=round(total_time, 2),
+        )
+
         for result in results:
-            status = "[OK]" if not result.errors else "[FAILED]"
-            print(f"{status} {result.title}: {result.chunks_created} chunks")
+            await logger.info(
+                "ingestion_result",
+                action="ingestion_result",
+                title=result.title,
+                chunks_created=result.chunks_created,
+                errors=result.errors,
+                success=not result.errors,
+            )
 
-            if result.errors:
-                for error in result.errors:
-                    print(f"  Error: {error}")
-
-        # Print next steps
-        print("\n" + "="*50)
-        print("NEXT STEPS")
-        print("="*50)
-        print("1. Create vector search index in Atlas UI:")
-        print("   - Index name: vector_index")
-        print("   - Collection: chunks")
-        print("   - Field: embedding")
-        print("   - Dimensions: 1536 (for text-embedding-3-small)")
-        print()
-        print("2. Create text search index in Atlas UI:")
-        print("   - Index name: text_index")
-        print("   - Collection: chunks")
-        print("   - Field: content")
-        print()
-        print("See .claude/reference/mongodb-patterns.md for detailed instructions")
+        await logger.info(
+            "ingestion_next_steps",
+            action="ingestion_next_steps",
+            vector_index_name="vector_index",
+            text_index_name="text_index",
+            vector_index_collection="chunks",
+            text_index_collection="chunks",
+            vector_index_field="embedding",
+            vector_index_dimensions=1536,
+            text_index_field="content",
+            reference_doc=".claude/reference/mongodb-patterns.md",
+        )
 
     except KeyboardInterrupt:
-        print("\nIngestion interrupted by user")
+        await logger.warning(
+            "ingestion_interrupted",
+            action="ingestion_interrupted",
+        )
     except Exception as e:
-        logger.exception(f"Ingestion failed: {e}")
+        await logger.error(
+            "ingestion_failed",
+            action="ingestion_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         raise
     finally:
         await pipeline.close()

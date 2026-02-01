@@ -55,6 +55,15 @@
 # Docker (self-hosted)
 - docker-compose up -d
 - docker-compose logs -f rag-agent
+- python start_services.py
+
+## Docker Configuration
+- Use host ports in the 7000–7500 range to avoid conflicts with other infrastructure.
+- Current defaults:
+   - MongoDB: 7017 -> container 27017
+   - Mongot (Atlas Search): 7027 -> container 27027 (docker-compose-search.yml)
+   - SearXNG: 7080 -> container 8080
+- Prefer `.env` with `env_file` in compose to reduce inline environment noise.
 
 # Lint / Format
 - uv run ruff check .
@@ -69,19 +78,59 @@
 - src/logging_config.py: shared console logging configuration.
 - documents/: sample and user-provided documents.
 - examples/: reference-only patterns (do not modify).
-- test_scripts/: ad-hoc validation scripts.
+- sample/: validation and example scripts by domain.
+- tests/: pytest-style validation tests.
 
 ### Data Flow
-1. Ingestion converts documents → chunks with embeddings.
+1. Ingestion converts documents → DoclingChunks (structure-aware, inherits Source, includes MetadataPassport and frontmatter) with embeddings.
 2. Chunks + documents stored in MongoDB (two-collection pattern).
-3. Agent queries MongoDB via semantic, text, and hybrid search.
+3. Deduplication is handled via upsert on content_hash (hash of chunk body); minor changes to chunk text will create new entries, but this ensures no exact duplicates. Optionally, deduplication can be keyed on source identity (e.g., URL) if required.
+4. Agent queries MongoDB via semantic, text, and hybrid search.
 
 ### Service Composition Pattern
 - Not used; prefer small, focused classes and async functions.
 
-### Network/Communication
-- MongoDB Atlas Vector Search + Atlas Search via aggregation pipelines.
-- OpenAI-compatible LLM/embedding providers.
+### Docker Compose & Port Mapping
+
+- **MongoDB**: Host port 7017 → container 27017
+- **Mongot (Atlas Search)**: Host port 7027 → container 27027
+- **SearXNG**: Host port 7080 → container 8080
+
+These ports are set in `docker-compose-search.yml` and must match `.env` and app settings. See `docs/design_patterns.md` for details and best practices.
+
+- All sensitive values and connection strings are set in `.env` and referenced in compose files using `${VAR}` syntax.
+- Avoid mapping multiple services to the same host port.
+- If you change a port, update all references in `.env`, compose, and settings.
+
+See also: [docs/design_patterns.md](docs/design_patterns.md)
+
+---
+
+## Repository Map (Top Level)
+
+```mermaid
+flowchart TB
+   root[MongoDB-RAG-Agent/]
+   root --> src[src/ - core runtime + ingestion + integrations]
+   root --> docs[docs/ - design docs]
+   root --> sample[sample/ - reference scripts]
+   root --> tests[tests/ - validation tests]
+   root --> server[server/ - maintenance scripts]
+   root --> scripts[scripts/ - maintenance (avoid modifying)]
+   root --> data[data/ - local data cache]
+
+   root --> docker[docker + runtime]
+   docker --> dockerfile[Dockerfile]
+   docker --> compose[docker-compose.yml]
+   docker --> compose_search[docker-compose-search.yml]
+   docker --> start_services[start_services.py]
+
+   root --> config[project config]
+   config --> readme[README.md]
+   config --> pyproject[pyproject.toml]
+   config --> agents[AGENTS.md]
+```
+
 
 ## File Organization & Root Directory Standards
 
@@ -90,15 +139,19 @@ Do not create new root-level files or directories beyond AGENTS.md. Use:
 - .claude/ for reference docs
 - docs/ for documentation
 - scripts/ for maintenance scripts (avoid modifying)
-- test_scripts/ for validation scripts
+- sample/ for validation scripts
+- tests/ for pytest-style checks
 - temp/ for scratch (gitignored)
 
-## Common Patterns
+### DoclingChunks Model Refactor
+When: chunking and storing document segments for RAG.
+Pattern: Use `DoclingChunks` (renamed from `DocumentChunk`), which inherits from `Source` and includes the full `MetadataPassport` and frontmatter. See `src/ingestion/docling/chunker.py` for implementation.
+Anti-pattern: Using ad-hoc chunk models or omitting metadata/frontmatter.
 
-### Settings via Pydantic Settings
-When: reading .env config consistently.
-Example: src/settings.py
-Anti-pattern: accessing os.environ directly in multiple modules.
+### Intelligent Chunking Sample
+When: chunking large documents with structure-aware subsetting.
+Pattern: See `sample/docling/chunk_pydantic_sample.py` for an example that subsets markdown by headings before chunking into `DoclingChunks`.
+Anti-pattern: Blindly chunking large documents without subsetting or structure awareness.
 
 ### Dependencies Initialization
 When: MongoDB or embedding client access.
@@ -119,6 +172,11 @@ Anti-pattern: passing raw markdown string to HybridChunker.
 When: pulling content from Crawl4AI or Google Drive/Docs.
 Example: src/ingestion/ingest.py and src/ingestion/google_drive.py
 Anti-pattern: bypassing metadata extraction or skipping Docling conversion for file formats.
+
+### Integration Exports (Frontmatter)
+When: exporting markdown from integrations (Crawl4AI, Google Drive).
+Example: src/integrations/models.py
+Anti-pattern: returning raw markdown without `SourceFrontmatter`.
 
 ### Logging Configuration
 When: initializing CLI or batch scripts.
@@ -164,6 +222,8 @@ Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
    - Log and continue; do not crash ingestion.
 5. Google Drive access errors:
    - Verify GOOGLE_SERVICE_ACCOUNT_FILE and optional impersonation subject.
+6. Deduplication:
+   - Upsert on content_hash prevents exact duplicate chunks. For source-level deduplication, consider using a source-identity key (e.g., URL).
 
 ## Agent Gotchas
 

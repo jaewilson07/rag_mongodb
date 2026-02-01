@@ -2,18 +2,18 @@ name: ragagent
 version: '3.8'
 
 services:
-  mongodb:
-    image: mongodb/mongodb-enterprise-server:8.0-ubuntu2204
-    command: --setParameter searchIndexManagementHostAndPort=mongot:27027
+  atlas-local:
+    image: mongodb/mongodb-atlas-local:latest
     environment:
       MONGODB_INITDB_ROOT_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-admin}
       MONGODB_INITDB_ROOT_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD:-admin123}
       MONGODB_INITDB_DATABASE: ${MONGODB_INITDB_DATABASE:-rag_db}
+      DO_NOT_TRACK: ${MONGODB_DO_NOT_TRACK:-1}
     ports:
-      - "27017:27017"
+      - "7017:27017"
     volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
+      - atlas_local_data:/data/db
+      - atlas_local_config:/data/configdb
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -22,27 +22,14 @@ services:
       start_period: 30s
     networks:
       - rag_network
-    depends_on:
-      mongot:
-        condition: service_healthy
     restart: unless-stopped
 
-  mongot:
-    image: mongodb/mongodb-atlas-search:1.17.0
-    environment:
-      MONGOD_HOST_AND_PORT: mongodb:27017
-      MONGOD_ROOT_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-admin}
-      MONGOD_ROOT_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD:-admin123}
+  searxng:
+    image: searxng/searxng:latest
     ports:
-      - "27027:27027"
+      - "7080:8080"
     volumes:
-      - mongot_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongot", "--version"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      - ./docker/searxng/settings.yml:/etc/searxng/settings.yml:ro
     networks:
       - rag_network
     restart: unless-stopped
@@ -56,5 +43,7 @@ volumes:
     driver: local
   mongodb_config:
     driver: local
-  mongot_data:
+  atlas_local_data:
+    driver: local
+  atlas_local_config:
     driver: local

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.dependencies import AgentDependencies
-from src.server.config import api_config
+from mdrag.dependencies import AgentDependencies
+from mdrag.mdrag_logging.service_logging import log_call
+from mdrag.server.config import api_config
 
 health_router = APIRouter(
     prefix=api_config.HEALTH_PREFIX,
@@ -14,6 +15,7 @@ health_router = APIRouter(
 
 
 @health_router.get("/vector-db")
+@log_call(action_name="vector_db_health")
 async def vector_db_health() -> dict:
     """Return vector database status and document counts."""
     deps = AgentDependencies()

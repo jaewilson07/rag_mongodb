@@ -37,9 +37,11 @@ examples/
 ├── tools.py           # Search tools (semantic, hybrid)
 ├── prompts.py         # System prompts
 └── ingestion/
-    ├── chunker.py     # Docling HybridChunker wrapper
-    ├── embedder.py    # Batch embedding generation
-    └── ingest.py      # Multi-format document pipeline
+    ├── docling/
+    │   ├── chunker.py  # Docling HybridChunker wrapper
+    │   └── processor.py
+    ├── embedder.py     # Batch embedding generation
+    └── ingest.py       # Multi-format document pipeline
 ```
 
 ---

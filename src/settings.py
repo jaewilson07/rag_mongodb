@@ -96,6 +96,32 @@ class Settings(BaseSettings):
         default=0.3, description="Default text weight for hybrid search (0-1)"
     )
 
+    # Self-Corrective RAG Configuration
+    rag_max_iterations: int = Field(
+        default=2,
+        description="Maximum query rewrite iterations for self-corrective RAG",
+    )
+
+    rag_max_generation_attempts: int = Field(
+        default=2,
+        description="Maximum generation attempts for citation verification",
+    )
+
+    rag_web_result_count: int = Field(
+        default=5,
+        description="Number of SearXNG results to include per query",
+    )
+
+    rag_citation_soft_fail_banner: str = Field(
+        default="Warning: Some statements may be insufficiently sourced.",
+        description="Banner shown when citations fail verification",
+    )
+
+    # SearXNG Configuration
+    searxng_url: str = Field(
+        default="http://localhost:7080", description="SearXNG base URL"
+    )
+
     # Crawl4AI Configuration
     crawl4ai_word_count_threshold: int = Field(
         default=10, description="Minimum word count for Crawl4AI blocks"

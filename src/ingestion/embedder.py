@@ -2,28 +2,15 @@
 Document embedding generation for vector search.
 """
 
-import logging
 from typing import List, Optional
 from datetime import datetime
 
-from dotenv import load_dotenv
-import openai
+from mdrag.ingestion.docling.chunker import DoclingChunks
+from mdrag.mdrag_logging.service_logging import get_logger
+from mdrag.settings import Settings, load_settings
+from mdrag.retrieval.embeddings import EmbeddingClient
 
-from src.ingestion.chunker import DocumentChunk
-from src.settings import load_settings
-
-# Load environment variables
-load_dotenv()
-
-logger = logging.getLogger(__name__)
-
-# Initialize client with settings
-settings = load_settings()
-embedding_client = openai.AsyncOpenAI(
-    api_key=settings.embedding_api_key,
-    base_url=settings.embedding_base_url
-)
-EMBEDDING_MODEL = settings.embedding_model
+logger = get_logger(__name__)
 
 
 class EmbeddingGenerator:
@@ -31,8 +18,10 @@ class EmbeddingGenerator:
 
     def __init__(
         self,
-        model: str = EMBEDDING_MODEL,
-        batch_size: int = 100
+        model: Optional[str] = None,
+        batch_size: int = 100,
+        settings: Optional[Settings] = None,
+        client: Optional[EmbeddingClient] = None,
     ):
         """
         Initialize embedding generator.
@@ -41,20 +30,10 @@ class EmbeddingGenerator:
             model: Embedding model to use
             batch_size: Number of texts to process in parallel
         """
-        self.model = model
+        self.settings = settings or load_settings()
+        self.model = model or self.settings.embedding_model
         self.batch_size = batch_size
-
-        # Model-specific configurations
-        self.model_configs = {
-            "text-embedding-3-small": {"dimensions": 1536, "max_tokens": 8191},
-            "text-embedding-3-large": {"dimensions": 3072, "max_tokens": 8191},
-            "text-embedding-ada-002": {"dimensions": 1536, "max_tokens": 8191}
-        }
-
-        self.config = self.model_configs.get(
-            model,
-            {"dimensions": 1536, "max_tokens": 8191}
-        )
+        self.client = client or EmbeddingClient(settings=self.settings, model=self.model)
 
     async def generate_embedding(self, text: str) -> List[float]:
         """
@@ -66,16 +45,7 @@ class EmbeddingGenerator:
         Returns:
             Embedding vector
         """
-        # Truncate text if too long (rough estimation: 4 chars per token)
-        if len(text) > self.config["max_tokens"] * 4:
-            text = text[:self.config["max_tokens"] * 4]
-
-        response = await embedding_client.embeddings.create(
-            model=self.model,
-            input=text
-        )
-
-        return response.data[0].embedding
+        return await self.client.embed_text(text)
 
     async def generate_embeddings_batch(
         self,
@@ -90,25 +60,13 @@ class EmbeddingGenerator:
         Returns:
             List of embedding vectors
         """
-        # Truncate texts if too long
-        processed_texts = []
-        for text in texts:
-            if len(text) > self.config["max_tokens"] * 4:
-                text = text[:self.config["max_tokens"] * 4]
-            processed_texts.append(text)
-
-        response = await embedding_client.embeddings.create(
-            model=self.model,
-            input=processed_texts
-        )
-
-        return [data.embedding for data in response.data]
+        return await self.client.embed_texts(texts)
 
     async def embed_chunks(
         self,
-        chunks: List[DocumentChunk],
+        chunks: List[DoclingChunks],
         progress_callback: Optional[callable] = None
-    ) -> List[DocumentChunk]:
+    ) -> List[DoclingChunks]:
         """
         Generate embeddings for document chunks.
 
@@ -122,7 +80,13 @@ class EmbeddingGenerator:
         if not chunks:
             return chunks
 
-        logger.info(f"Generating embeddings for {len(chunks)} chunks")
+        await logger.info(
+            "embedding_generation_start",
+            action="embedding_generation_start",
+            chunk_count=len(chunks),
+            batch_size=self.batch_size,
+            model=self.model,
+        )
 
         # Process chunks in batches
         embedded_chunks = []
@@ -142,7 +106,8 @@ class EmbeddingGenerator:
 
             # Add embeddings to chunks
             for chunk, embedding in zip(batch_chunks, embeddings):
-                embedded_chunk = DocumentChunk(
+                embedded_chunk = DoclingChunks(
+                    frontmatter=chunk.frontmatter,
                     content=chunk.content,
                     index=chunk.index,
                     start_char=chunk.start_char,
@@ -152,6 +117,7 @@ class EmbeddingGenerator:
                         "embedding_model": self.model,
                         "embedding_generated_at": datetime.now().isoformat()
                     },
+                    passport=chunk.passport,
                     token_count=chunk.token_count
                 )
                 embedded_chunk.embedding = embedding
@@ -162,9 +128,19 @@ class EmbeddingGenerator:
             if progress_callback:
                 progress_callback(current_batch, total_batches)
 
-            logger.info(f"Processed batch {current_batch}/{total_batches}")
+            await logger.debug(
+                "embedding_batch_complete",
+                action="embedding_batch_complete",
+                batch=current_batch,
+                total_batches=total_batches,
+            )
 
-        logger.info(f"Generated embeddings for {len(embedded_chunks)} chunks")
+        await logger.info(
+            "embedding_generation_complete",
+            action="embedding_generation_complete",
+            chunk_count=len(embedded_chunks),
+            model=self.model,
+        )
         return embedded_chunks
 
     async def embed_query(self, query: str) -> List[float]:
@@ -181,14 +157,14 @@ class EmbeddingGenerator:
 
     async def close(self) -> None:
         """Close the embedding client."""
-        await embedding_client.close()
+        await self.client.close()
 
     def get_embedding_dimension(self) -> int:
         """Get the dimension of embeddings for this model."""
-        return self.config["dimensions"]
+        return self.client.embedding_dimension()
 
 
-def create_embedder(model: str = EMBEDDING_MODEL, **kwargs) -> EmbeddingGenerator:
+def create_embedder(model: Optional[str] = None, **kwargs) -> EmbeddingGenerator:
     """
     Create embedding generator.
 

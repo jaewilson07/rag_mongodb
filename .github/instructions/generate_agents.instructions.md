@@ -410,7 +410,7 @@ Before finalizing AGENTS.md files:
 ```markdown
 # GitHub Copilot Instructions
 
-> **Note**: This is a summarized version. See [AGENTS.md](../AGENTS.md) as source of truth.
+> **Note**: This is a summarized version. See [AGENTS.md](../../AGENTS.md) as source of truth.
 
 [Brief summary of key rules]
 ```
@@ -447,9 +447,7 @@ Before finalizing AGENTS.md files:
 
 ## Related Skills
 
-- [Skill Development](../skill-development/SKILL.md) - Best practices for creating skills
-- [Init Project](../init-project/SKILL.md) - Project setup with AGENTS.md
-- [Code Review](../validation/code-review/SKILL.md) - Review AGENTS.md quality
+Related skills documentation is maintained outside this repository.
 
 ## References
 

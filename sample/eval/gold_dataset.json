@@ -1,0 +1,42 @@
+[
+  {
+    "question": "When was NeuralFlow AI founded?",
+    "expected": ["2023", "founded"]
+  },
+  {
+    "question": "How many employees does NeuralFlow AI have?",
+    "expected": ["47", "employees"]
+  },
+  {
+    "question": "What is NeuralFlow AI's revenue goal for 2025?",
+    "expected": ["12M", "$12M", "annual recurring revenue"]
+  },
+  {
+    "question": "What are the three flagship AI automation products?",
+    "expected": ["DocFlow AI", "ConversePro", "AnalyticsMind"]
+  },
+  {
+    "question": "What are the in-office days for NeuralFlow AI?",
+    "expected": ["Tuesday", "Wednesday", "Thursday"]
+  },
+  {
+    "question": "What are the remote days for NeuralFlow AI?",
+    "expected": ["Monday", "Friday", "remote"]
+  },
+  {
+    "question": "What is the annual learning budget per employee?",
+    "expected": ["$2,500", "2500", "learning budget"]
+  },
+  {
+    "question": "What is NeuralFlow AI's client retention rate?",
+    "expected": ["94%", "retention"]
+  },
+  {
+    "question": "What industries does NeuralFlow AI specialize in?",
+    "expected": ["financial", "healthcare", "legal", "e-commerce", "retail"]
+  },
+  {
+    "question": "What are the core collaboration hours?",
+    "expected": ["10 AM", "4 PM", "Pacific Time"]
+  }
+]

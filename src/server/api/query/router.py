@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.query import QueryService
-from src.server.api.query.models import QueryRequest, QueryResponse
-from src.server.config import api_config
+from mdrag.mdrag_logging.service_logging import log_call
+from mdrag.server.api.query.models import QueryRequest, QueryResponse
+from mdrag.server.config import api_config
+from mdrag.server.services.query import QueryAPIService
 
 query_router = APIRouter(
     prefix=api_config.QUERY_PREFIX,
@@ -15,17 +16,8 @@ query_router = APIRouter(
 
 
 @query_router.post("", response_model=QueryResponse)
+@log_call(action_name="query_knowledge_base")
 async def query_knowledge_base(request: QueryRequest) -> QueryResponse:
     """Run grounded query with citations."""
-    service = QueryService()
-    try:
-        result = await service.answer_query(
-            query=request.query,
-            search_type=request.search_type,
-            match_count=request.match_count,
-            filters=request.filters,
-            parent_trace_id=request.parent_trace_id,
-        )
-        return QueryResponse(**result)
-    finally:
-        await service.close()
+    service = QueryAPIService()
+    return await service.handle_query(request)

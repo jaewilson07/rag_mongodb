@@ -1,8 +1,8 @@
 [project]
-name = "mongodb-rag-agent"
+name = "mdrag"
 version = "0.1.0"
 description = "Agentic RAG system with MongoDB Atlas Vector Search"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
@@ -21,17 +21,31 @@ dependencies = [
     "transformers>=4.47.0",
     "rich>=13.9.0",
     "python-dotenv>=1.0.1",
+    "httpx>=0.27.0",
     "aiofiles>=24.1.0",
     "openai-whisper>=20240930; python_version < '3.12'",
     "crawl4ai",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langgraph>=0.2.0",
+    "langsmith>=0.1.147",
     "google-api-python-client>=2.160.0",
     "google-auth>=2.37.0",
     "google-auth-httplib2>=0.2.0",
+    "dc-logger>=1.2.1",
+    "beautifulsoup4>=4.12.0",
+    "markdownify>=0.12.1",
+    "pyyaml>=6.0",
+    "objprint>=0.2.3",
 ]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["mdrag"]
+package-dir = {mdrag = "src"}
 
 [dependency-groups]
 dev = [
@@ -40,3 +54,6 @@ dev = [
     "black>=24.10.0",
     "ruff>=0.8.0",
 ]
+
+[tool.pyright]
+extraPaths = ["src"]

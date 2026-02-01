@@ -1,14 +1,13 @@
-"""Crawl4AI service client for web crawling operations."""
+"""Crawl4AI service client for web crawling operations.
 
-import logging
-from typing import Any
+This module provides a unified interface for crawling web pages using Crawl4AI,
+supporting both single-page and deep crawling with configurable parameters.
+"""
 
-from crawl4ai import AsyncWebCrawler
+from ...mdrag_logging.service_logging import log_service_class
+from ..models import Source
 
-from src.logging_utils import log_service_class
-from src.integrations.crawl4ai.crawler import crawl_deep, crawl_single_page
-
-logger = logging.getLogger(__name__)
+from .crawler import crawl_deep, crawl_single_page
 
 
 @log_service_class
@@ -26,23 +25,48 @@ class Crawl4AIClient:
         timeout: int = 30,
         cookies: str | dict[str, str] | None = None,
         user_agent: str | None = None,
-    ) -> dict[str, Any] | None:
-        """Crawl a single web page and extract content."""
-        _ = browser_type
-        _ = timeout
-        _ = user_agent
+        wait_for_selector: str | None = None,
+        wait_until: str | None = None,
+        wait_for_timeout: int | None = None,
+        page_timeout: int | None = None,
+        css_selector: str | None = None,
+        allow_fallback: bool = True,
+    ) -> Source | None:
+        """
+        Crawl a single web page and extract content.
 
-        async with AsyncWebCrawler() as crawler:
-            return await crawl_single_page(
-                crawler=crawler,
-                url=url,
-                word_count_threshold=word_count_threshold,
-                remove_overlay_elements=remove_overlay_elements,
-                remove_base64_images=remove_base64_images,
-                cache_mode=cache_mode,
-                cookies=cookies,
-                user_agent=user_agent,
-            )
+        Args:
+            url: The URL to crawl
+            word_count_threshold: Minimum word count for a block to be included
+            remove_overlay_elements: Remove overlay elements from the page
+            remove_base64_images: Remove base64 encoded images
+            cache_mode: Cache mode for crawling (BYPASS, CACHED, or WRITE)
+            browser_type: Browser type to use (chromium or firefox)
+            timeout: Request timeout in seconds
+            cookies: Optional cookies as string or dict
+            user_agent: Optional custom user agent
+
+        Returns:
+            Source payload containing crawled content and metadata
+        """
+        return await crawl_single_page(
+            crawler=None,
+            url=url,
+            word_count_threshold=word_count_threshold,
+            remove_overlay_elements=remove_overlay_elements,
+            remove_base64_images=remove_base64_images,
+            cache_mode=cache_mode,
+            browser_type=browser_type,
+            timeout=timeout,
+            cookies=cookies,
+            user_agent=user_agent,
+            wait_for=wait_for_selector,
+            wait_until=wait_until,
+            wait_for_timeout=wait_for_timeout,
+            page_timeout=page_timeout,
+            css_selector=css_selector,
+            allow_fallback=allow_fallback,
+        )
 
     async def crawl_deep(
         self,
@@ -61,37 +85,44 @@ class Crawl4AIClient:
         user_agent: str | None = None,
         visited_urls: set[str] | None = None,
         current_depth: int = 0,
-    ) -> list[dict[str, Any]]:
-        """Perform a deep crawl of a website."""
-        _ = browser_type
-        _ = timeout
-        _ = user_agent
-        _ = visited_urls
-        _ = current_depth
+    ) -> list[Source]:
+        """
+        Perform a deep crawl of a website.
 
-        async with AsyncWebCrawler() as crawler:
-            results = await crawl_deep(
-                crawler=crawler,
-                start_url=start_url,
-                max_depth=max_depth,
-                allowed_domains=allowed_domains,
-                allowed_subdomains=allowed_subdomains,
-                max_concurrent=10,
-                cookies=cookies,
-                word_count_threshold=word_count_threshold,
-                remove_overlay_elements=remove_overlay_elements,
-                remove_base64_images=remove_base64_images,
-                cache_mode=cache_mode,
-            )
+        Args:
+            start_url: The starting URL for the crawl
+            max_depth: Maximum depth to crawl
+            allowed_domains: List of allowed domains (None = same domain as start_url)
+            allowed_subdomains: List of allowed subdomains
+            exclude_external_links: Exclude external links from crawl
+            remove_overlay_elements: Remove overlay elements from pages
+            remove_base64_images: Remove base64 encoded images
+            word_count_threshold: Minimum word count for a block to be included
+            cache_mode: Cache mode for crawling
+            browser_type: Browser type to use
+            timeout: Request timeout in seconds
+            cookies: Optional cookies
+            user_agent: Optional custom user agent
+            visited_urls: Set of already visited URLs (internal use)
+            current_depth: Current crawl depth (internal use)
 
-        if exclude_external_links:
-            filtered: list[dict[str, Any]] = []
-            for page in results:
-                links = page.get("links", [])
-                filtered.append({
-                    **page,
-                    "links": [link for link in links if link.startswith(start_url)],
-                })
-            return filtered
-
-        return results
+        Returns:
+            List of Source payloads for each crawled page
+        """
+        return await crawl_deep(
+            start_url=start_url,
+            max_depth=max_depth,
+            allowed_domains=allowed_domains,
+            allowed_subdomains=allowed_subdomains,
+            exclude_external_links=exclude_external_links,
+            remove_overlay_elements=remove_overlay_elements,
+            remove_base64_images=remove_base64_images,
+            word_count_threshold=word_count_threshold,
+            cache_mode=cache_mode,
+            browser_type=browser_type,
+            timeout=timeout,
+            cookies=cookies,
+            user_agent=user_agent,
+            visited_urls=visited_urls,
+            current_depth=current_depth,
+        )

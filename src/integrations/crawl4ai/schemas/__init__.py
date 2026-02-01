@@ -1,4 +1,4 @@
-"""Pydantic models for Crawl4AI integration."""
+"""Pydantic models for Crawl4AI service."""
 
 from typing import Any
 

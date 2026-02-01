@@ -2,18 +2,18 @@ name: ragagent
 version: '3.8'
 
 services:
-  mongodb:
-    image: mongodb/mongodb-enterprise-server:8.0-ubuntu2204
+  atlas-local:
+    image: mongodb/mongodb-atlas-local:latest
     environment:
-      # Initialize with root user (change these in production!)
       MONGODB_INITDB_ROOT_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-admin}
       MONGODB_INITDB_ROOT_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD:-admin123}
       MONGODB_INITDB_DATABASE: ${MONGODB_INITDB_DATABASE:-rag_db}
+      DO_NOT_TRACK: ${MONGODB_DO_NOT_TRACK:-1}
     ports:
-      - "27017:27017"
+        - "7017:27017"
     volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
+      - atlas_local_data:/data/db
+      - atlas_local_config:/data/configdb
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -24,13 +24,25 @@ services:
       - rag_network
     restart: unless-stopped
 
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+        - "7080:8080"
+    volumes:
+      - ./docker/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    networks:
+      - rag_network
+    restart: unless-stopped
+
   rag-agent:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
       # MongoDB connection (uses Docker service name)
-      MONGODB_URI: mongodb://${MONGODB_INITDB_ROOT_USERNAME:-admin}:${MONGODB_INITDB_ROOT_PASSWORD:-admin123}@mongodb:27017/${MONGODB_INITDB_DATABASE:-rag_db}?authSource=admin
+      MONGODB_URI: ${MONGODB_URI:-mongodb://${MONGODB_INITDB_ROOT_USERNAME:-admin}:${MONGODB_INITDB_ROOT_PASSWORD:-admin123}@atlas-local:27017/${MONGODB_INITDB_DATABASE:-rag_db}?authSource=admin}
       MONGODB_DATABASE: ${MONGODB_INITDB_DATABASE:-rag_db}
       MONGODB_COLLECTION_DOCUMENTS: documents
       MONGODB_COLLECTION_CHUNKS: chunks
@@ -54,19 +66,23 @@ services:
       DEFAULT_MATCH_COUNT: ${DEFAULT_MATCH_COUNT:-10}
       MAX_MATCH_COUNT: ${MAX_MATCH_COUNT:-50}
       DEFAULT_TEXT_WEIGHT: ${DEFAULT_TEXT_WEIGHT:-0.3}
+
+      # SearXNG Configuration
+      SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
     volumes:
       # Mount source code for development
       - ./src:/app/src
+      - ./server:/app/server
       - ./examples:/app/examples
       - ./documents:/app/documents
     depends_on:
-      mongodb:
+      atlas-local:
         condition: service_healthy
     networks:
       - rag_network
     stdin_open: true
     tty: true
-    command: ["sh", "-c", "python src/ingestion/init_indexes.py && python -m src.cli"]
+    command: ["sh", "-c", "python server/maintenance/init_indexes.py && python -m src.cli"]
     restart: unless-stopped
 
 networks:
@@ -74,7 +90,7 @@ networks:
     driver: bridge
 
 volumes:
-  mongodb_data:
+  atlas_local_data:
     driver: local
-  mongodb_config:
+  atlas_local_config:
     driver: local

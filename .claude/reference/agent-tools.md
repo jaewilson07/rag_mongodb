@@ -586,7 +586,7 @@ async def test_agent_with_real_search():
 
     # Setup
     state = RAGState()
-    deps = StateDeps[RAGState](state=state)
+    deps = StateDeps(state=state)
 
     # Initialize real connections
     agent_deps = AgentDependencies()

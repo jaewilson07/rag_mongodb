@@ -5,8 +5,8 @@ from typing import Optional, Dict, Any
 import logging
 from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-import openai
-from src.settings import load_settings
+from mdrag.settings import load_settings
+from mdrag.retrieval.embeddings import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class AgentDependencies:
     # Core dependencies
     mongo_client: Optional[AsyncMongoClient] = None
     db: Optional[Any] = None
-    openai_client: Optional[openai.AsyncOpenAI] = None
+    embedding_client: Optional[EmbeddingClient] = None
     settings: Optional[Any] = None
 
     # Session context
@@ -64,17 +64,10 @@ class AgentDependencies:
                 logger.exception("mongodb_connection_failed error=%s", str(e))
                 raise
 
-        # Initialize OpenAI client for embeddings
-        if not self.openai_client:
-            self.openai_client = openai.AsyncOpenAI(
-                api_key=self.settings.embedding_api_key,
-                base_url=self.settings.embedding_base_url,
-            )
-            logger.info(
-                "openai_client_initialized model=%s dimension=%s",
-                self.settings.embedding_model,
-                self.settings.embedding_dimension,
-            )
+        # Initialize embedding client
+        if not self.embedding_client:
+            self.embedding_client = EmbeddingClient(settings=self.settings)
+            await self.embedding_client.initialize()
 
     async def cleanup(self) -> None:
         """Clean up external connections."""
@@ -83,10 +76,9 @@ class AgentDependencies:
             self.mongo_client = None
             self.db = None
             logger.info("mongodb_connection_closed")
-        if self.openai_client:
-            await self.openai_client.close()
-            self.openai_client = None
-            logger.info("openai_client_closed")
+        if self.embedding_client:
+            await self.embedding_client.close()
+            self.embedding_client = None
 
     async def get_embedding(self, text: str) -> list[float]:
         """
@@ -101,14 +93,11 @@ class AgentDependencies:
         Raises:
             Exception: If embedding generation fails
         """
-        if not self.openai_client:
+        if not self.embedding_client:
             await self.initialize()
 
-        response = await self.openai_client.embeddings.create(
-            model=self.settings.embedding_model, input=text
-        )
         # Return as list of floats - MongoDB stores as native array
-        return response.data[0].embedding
+        return await self.embedding_client.embed_text(text)
 
     def set_user_preference(self, key: str, value: Any) -> None:
         """
