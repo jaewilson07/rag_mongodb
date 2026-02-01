@@ -8,7 +8,7 @@ This document describes the Docker Compose configuration patterns used in the Mo
 - **Mongot (Atlas Search)**: Exposed on host port 7027 → container 27027
 - **SearXNG**: Exposed on host port 7080 → container 8080
 
-These ports are chosen to avoid conflicts with other local infrastructure and are referenced in both `docker-compose-search.yml` and `.env` as needed.
+These ports are chosen to avoid conflicts with other local infrastructure and are referenced in `docker-compose.yml` and `.env` as needed.
 
 ## Environment Variables
 - All sensitive and environment-specific values (e.g., database credentials, API keys) are set in the `.env` file and referenced in compose files using `${VAR}` syntax.

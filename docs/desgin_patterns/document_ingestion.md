@@ -62,6 +62,6 @@ See: `sample/docling/chunk_pydantic_sample.py` for a working example of heading-
 - Host ports for local Docker services should live in the 7000–7500 range to avoid conflicts.
 - Current compose defaults:
 	- MongoDB: host 7017 -> container 27017
-	- Mongot (Atlas Search): host 7027 -> container 27027 (docker-compose-search.yml)
+	- Mongot (Atlas Search): host 7027 -> container 27027
 	- SearXNG: host 7080 -> container 8080
 - Use `.env` + `env_file` in compose to centralize configuration and reduce inline env overload.

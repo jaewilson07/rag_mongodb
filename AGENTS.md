@@ -61,7 +61,7 @@
 - Use host ports in the 7000–7500 range to avoid conflicts with other infrastructure.
 - Current defaults:
    - MongoDB: 7017 -> container 27017
-   - Mongot (Atlas Search): 7027 -> container 27027 (docker-compose-search.yml)
+   - Mongot (Atlas Search): 7027 -> container 27027
    - SearXNG: 7080 -> container 8080
 - Prefer `.env` with `env_file` in compose to reduce inline environment noise.
 
@@ -96,7 +96,7 @@
 - **Mongot (Atlas Search)**: Host port 7027 → container 27027
 - **SearXNG**: Host port 7080 → container 8080
 
-These ports are set in `docker-compose-search.yml` and must match `.env` and app settings. See `docs/design_patterns.md` for details and best practices.
+These ports are set in `docker-compose.yml` and must match `.env` and app settings. See `docs/design_patterns.md` for details and best practices.
 
 - All sensitive values and connection strings are set in `.env` and referenced in compose files using `${VAR}` syntax.
 - Avoid mapping multiple services to the same host port.
@@ -122,7 +122,6 @@ flowchart TB
    root --> docker[docker + runtime]
    docker --> dockerfile[Dockerfile]
    docker --> compose[docker-compose.yml]
-   docker --> compose_search[docker-compose-search.yml]
    docker --> start_services[start_services.py]
 
    root --> config[project config]

@@ -2,17 +2,33 @@
 
 import asyncio
 import sys
+from pathlib import Path
+
 from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure
 
-from mdrag.mdrag_logging.service_logging import get_logger, setup_logging
-from mdrag.settings import Settings
+ROOT_DIR = Path(__file__).resolve().parents[2]
+# Ensure local package imports work when running as a script.
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-logger = get_logger(__name__)
+
+def _load_logging():
+    from mdrag.mdrag_logging.service_logging import (  # type: ignore[reportMissingImports]
+        get_logger,
+        setup_logging,
+    )
+
+    return get_logger, setup_logging
 
 
 async def create_vector_search_index(
-    client: AsyncMongoClient, database: str, collection: str, index_name: str
+    client: AsyncMongoClient,
+    database: str,
+    collection: str,
+    index_name: str,
+    logger,
 ) -> bool:
     """
     Create vector search index on the chunks collection.
@@ -106,7 +122,11 @@ async def create_vector_search_index(
 
 
 async def create_text_search_index(
-    client: AsyncMongoClient, database: str, collection: str, index_name: str
+    client: AsyncMongoClient,
+    database: str,
+    collection: str,
+    index_name: str,
+    logger,
 ) -> bool:
     """
     Create full-text search index on the chunks collection.
@@ -200,14 +220,15 @@ async def create_text_search_index(
         return False
 
 
-async def initialize_indexes() -> bool:
+async def initialize_indexes(logger) -> bool:
     """
     Initialize all required MongoDB indexes for the RAG system.
 
     Returns:
         True if all indexes were created successfully, False otherwise
     """
-    await setup_logging()
+    from mdrag.settings import Settings  # type: ignore[reportMissingImports]
+
     settings = Settings()
     client = None
 
@@ -231,6 +252,7 @@ async def initialize_indexes() -> bool:
             settings.mongodb_database,
             settings.mongodb_collection_chunks,
             settings.mongodb_vector_index,
+            logger,
         )
 
         # Create text search index
@@ -239,6 +261,7 @@ async def initialize_indexes() -> bool:
             settings.mongodb_database,
             settings.mongodb_collection_chunks,
             settings.mongodb_text_index,
+            logger,
         )
 
         if vector_success and text_success:
@@ -267,9 +290,13 @@ async def initialize_indexes() -> bool:
 
 async def main():
     """Main entry point for index initialization."""
+    get_logger, setup_logging = _load_logging()
+    await setup_logging()
+    logger = get_logger(__name__)
+
     await logger.info("Starting MongoDB index initialization...")
 
-    success = await initialize_indexes()
+    success = await initialize_indexes(logger)
 
     if success:
         await logger.info("Index initialization completed successfully")

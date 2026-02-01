@@ -7,15 +7,15 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.24 /uv /usr/local/bin/uv
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files
+# Copy dependency files and source for install
 COPY pyproject.toml ./
+COPY src/ ./src/
 
 # Create virtual environment and install dependencies
 RUN uv venv /app/.venv
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
-    uv pip compile pyproject.toml -o /tmp/requirements.txt && \
-    uv pip install --python /app/.venv/bin/python -r /tmp/requirements.txt
+    uv pip install --python /app/.venv/bin/python .
 
 # Final stage
 FROM python:3.11.7-slim
@@ -36,6 +36,8 @@ WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
 # Copy application code
+COPY --chown=app:app src/ ./src/
+COPY --chown=app:app server/ ./server/
 COPY --chown=app:app data/ ./data/
 
 # Set Python path to use virtual environment

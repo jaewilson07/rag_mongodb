@@ -44,8 +44,11 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["mdrag"]
 package-dir = {mdrag = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mdrag*"]
 
 [dependency-groups]
 dev = [

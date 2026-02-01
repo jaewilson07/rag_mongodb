@@ -214,13 +214,10 @@ cp /path/to/your/docs/*.pdf ./documents/
 ### 4. Start the Services
 
 ```bash
-# Build and start MongoDB + RAG Agent
+# Build and start MongoDB + RAG Agent (includes mongot for Atlas Search)
 docker-compose up -d
 
-# If you need $search / $vectorSearch locally, start the search stack (includes mongot)
-docker-compose -f docker-compose-search.yml up -d
-
-# Optional helper script (starts docker-compose.yml; add --search for docker-compose-search.yml)
+# Optional helper script
 python start_services.py
 
 # View logs
@@ -234,7 +231,7 @@ This will:
 
 **Port conventions (host → container):**
 - MongoDB: 7017 → 27017
-- Mongot (Atlas Search, if using docker-compose-search.yml): 7027 → 27027
+- Mongot (Atlas Search): 7027 → 27027
 - SearXNG: 7080 → 8080
 
 ### 5. Run Document Ingestion
@@ -258,11 +255,8 @@ docker-compose exec rag-agent python -m src.cli
 ### Docker Commands Reference
 
 ```bash
-# Start services
+# Start services (MongoDB + mongot + SearXNG)
 docker-compose up -d
-
-# Start search stack (MongoDB + mongot + SearXNG)
-docker-compose -f docker-compose-search.yml up -d
 
 # Stop services
 docker-compose down
@@ -287,7 +281,7 @@ docker-compose up -d --build
 - **Cause**: `$search` and `$vectorSearch` require Atlas Search (cloud) or a local `mongot` sidecar.
 - **Solution**:
   - **Atlas**: Use Option A and create the `vector_index` and `text_index` in Atlas UI.
-  - **Docker**: Start the search stack with `docker-compose -f docker-compose-search.yml up -d`.
+  - **Docker**: Ensure `docker-compose up -d` is running and mongot is reachable on port 7027.
 
 **Issue**: "Vector search not supported"
 - **Cause**: Using MongoDB Community Edition instead of Enterprise
