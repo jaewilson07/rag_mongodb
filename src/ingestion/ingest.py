@@ -27,6 +27,9 @@ from mdrag.ingestion.docling.chunker import (
 from mdrag.integrations.google_drive import parse_csv_values
 from mdrag.ingestion.docling.processor import DocumentProcessor, ProcessedDocument
 from mdrag.ingestion.embedder import create_embedder
+from mdrag.ingestion.docling.darwinxml_wrapper import DarwinXMLWrapper
+from mdrag.ingestion.docling.darwinxml_storage import DarwinXMLStorage
+from mdrag.ingestion.docling.darwinxml_validator import DarwinXMLValidator, ValidationStatus
 from mdrag.mdrag_logging.service_logging import get_logger, log_async, setup_logging
 from mdrag.settings import load_settings
 
@@ -43,6 +46,9 @@ class IngestionConfig:
     chunk_overlap: int = 200
     max_chunk_size: int = 2000
     max_tokens: int = 512
+    enable_darwinxml: bool = False  # Enable DarwinXML semantic wrapper
+    darwinxml_validate: bool = True  # Validate DarwinXML documents
+    darwinxml_strict: bool = False  # Strict validation mode
 
 
 @dataclass
@@ -97,6 +103,11 @@ class DocumentIngestionPipeline:
         self.documents_folder = documents_folder
         self.clean_before_ingest = clean_before_ingest
 
+        # DarwinXML components (initialized if enabled)
+        self.darwin_wrapper: Optional[DarwinXMLWrapper] = None
+        self.darwin_storage: Optional[DarwinXMLStorage] = None
+        self.darwin_validator: Optional[DarwinXMLValidator] = None
+
         # Load settings
         self.settings = load_settings()
 
@@ -141,6 +152,36 @@ class DocumentIngestionPipeline:
 
             # Verify connection
             await self.mongo_client.admin.command("ping")
+
+            # Initialize DarwinXML components if enabled
+            if self.config.enable_darwinxml:
+                await logger.info(
+                    "darwin_initialization_start",
+                    action="darwin_initialization_start",
+                )
+                
+                chunks_collection = self.db[self.settings.mongodb_collection_chunks]
+                
+                self.darwin_wrapper = DarwinXMLWrapper(
+                    embedding_model=self.settings.embedding_model,
+                    enable_entity_extraction=True,
+                    enable_category_tagging=True,
+                )
+                
+                self.darwin_storage = DarwinXMLStorage(
+                    chunks_collection=chunks_collection,
+                )
+                
+                self.darwin_validator = DarwinXMLValidator(
+                    strict_mode=self.config.darwinxml_strict,
+                    require_annotations=True,
+                    require_provenance=True,
+                )
+                
+                await logger.info(
+                    "darwin_initialization_complete",
+                    action="darwin_initialization_complete",
+                )
             await logger.info(
                 "mongodb_connection_ready",
                 action="mongodb_connection_ready",
@@ -317,35 +358,44 @@ class DocumentIngestionPipeline:
                 )
 
         # Insert chunks with embeddings as Python lists
-        chunk_dicts = []
-        for chunk in chunks:
-            chunk_metadata = self._build_chunk_metadata(metadata, chunk.metadata)
-            chunk_dict = {
-                "document_id": document_id,
-                "content": chunk.content,
-                "embedding": chunk.embedding,  # Python list, NOT string!
-                "chunk_index": chunk.index,
-                "metadata": chunk_metadata,
-                "knowledge_base_id": str(document_id),
-                "token_count": chunk.token_count,
-                "summary_context": chunk_metadata.get("summary_context"),
-                "source_url": chunk_metadata.get("source_url"),
-                "source_type": chunk_metadata.get("source_type"),
-                "source_group": chunk_metadata.get("source_group"),
-                "source_mask": chunk_metadata.get("source_mask"),
-                "user_id": chunk_metadata.get("user_id"),
-                "org_id": chunk_metadata.get("org_id"),
-                "page_number": chunk_metadata.get("page_number"),
-                "heading_path": chunk_metadata.get("heading_path"),
-                "is_table": chunk_metadata.get("is_table"),
-                "content_hash": content_hash,
-                "created_at": datetime.now()
-            }
-            chunk_dicts.append(self._sanitize_for_mongo(chunk_dict))
+        # If DarwinXML is enabled, use DarwinXML storage instead
+        if self.config.enable_darwinxml and self.darwin_wrapper and self.darwin_storage:
+            await self._save_chunks_with_darwinxml(
+                chunks=chunks,
+                document_id=str(document_id),
+                content_hash=content_hash,
+            )
+        else:
+            # Standard chunk storage
+            chunk_dicts = []
+            for chunk in chunks:
+                chunk_metadata = self._build_chunk_metadata(metadata, chunk.metadata)
+                chunk_dict = {
+                    "document_id": document_id,
+                    "content": chunk.content,
+                    "embedding": chunk.embedding,  # Python list, NOT string!
+                    "chunk_index": chunk.index,
+                    "metadata": chunk_metadata,
+                    "knowledge_base_id": str(document_id),
+                    "token_count": chunk.token_count,
+                    "summary_context": chunk_metadata.get("summary_context"),
+                    "source_url": chunk_metadata.get("source_url"),
+                    "source_type": chunk_metadata.get("source_type"),
+                    "source_group": chunk_metadata.get("source_group"),
+                    "source_mask": chunk_metadata.get("source_mask"),
+                    "user_id": chunk_metadata.get("user_id"),
+                    "org_id": chunk_metadata.get("org_id"),
+                    "page_number": chunk_metadata.get("page_number"),
+                    "heading_path": chunk_metadata.get("heading_path"),
+                    "is_table": chunk_metadata.get("is_table"),
+                    "content_hash": content_hash,
+                    "created_at": datetime.now()
+                }
+                chunk_dicts.append(self._sanitize_for_mongo(chunk_dict))
 
-        # Batch insert with ordered=False for partial success
-        if chunk_dicts:
-            await chunks_collection.insert_many(chunk_dicts, ordered=False)
+            # Batch insert with ordered=False for partial success
+            if chunk_dicts:
+                await chunks_collection.insert_many(chunk_dicts, ordered=False)
             await logger.info(
                 "mongodb_chunks_inserted",
                 action="mongodb_chunks_inserted",
@@ -353,6 +403,95 @@ class DocumentIngestionPipeline:
             )
 
         return str(document_id)
+
+    async def _save_chunks_with_darwinxml(
+        self,
+        chunks: List[DoclingChunks],
+        document_id: str,
+        content_hash: str,
+    ) -> None:
+        """
+        Save chunks with DarwinXML semantic wrapper.
+
+        Args:
+            chunks: List of DoclingChunks to wrap and store
+            document_id: Document identifier
+            content_hash: Content hash for deduplication
+        """
+        if not self.darwin_wrapper or not self.darwin_storage or not self.darwin_validator:
+            await logger.error(
+                "darwin_components_not_initialized",
+                action="darwin_components_not_initialized",
+            )
+            return
+
+        # Wrap chunks in DarwinXML format
+        darwin_docs = self.darwin_wrapper.wrap_chunks_batch(
+            chunks=chunks,
+            document_id=document_id,
+            validation_status=ValidationStatus.UNVALIDATED,
+        )
+
+        # Validate if enabled
+        if self.config.darwinxml_validate:
+            validation_results = self.darwin_validator.validate_batch(darwin_docs)
+            
+            valid_docs = []
+            invalid_count = 0
+            
+            for darwin_doc in darwin_docs:
+                result = validation_results.get(darwin_doc.id)
+                if result and result.is_valid:
+                    darwin_doc.provenance.validation_status = ValidationStatus.VALIDATED
+                    valid_docs.append(darwin_doc)
+                else:
+                    invalid_count += 1
+                    if result:
+                        await logger.warning(
+                            "darwin_validation_failed",
+                            action="darwin_validation_failed",
+                            chunk_uuid=darwin_doc.chunk_uuid,
+                            errors=result.errors,
+                            warnings=result.warnings,
+                        )
+
+            if invalid_count > 0:
+                await logger.warning(
+                    "darwin_validation_summary",
+                    action="darwin_validation_summary",
+                    total_chunks=len(darwin_docs),
+                    invalid_count=invalid_count,
+                )
+
+            darwin_docs = valid_docs
+
+        # Extract embeddings from chunks
+        embeddings = [chunk.embedding for chunk in chunks if chunk.embedding]
+
+        # Store DarwinXML documents
+        doc_ids = await self.darwin_storage.store_darwin_documents_batch(
+            darwin_docs=darwin_docs,
+            embeddings=embeddings if embeddings else None,
+            upsert=True,
+        )
+
+        await logger.info(
+            "darwin_chunks_stored",
+            action="darwin_chunks_stored",
+            total_chunks=len(darwin_docs),
+            document_id=document_id,
+        )
+
+        # Optionally log graph triples for Neo4j integration
+        if darwin_docs:
+            sample_doc = darwin_docs[0]
+            triples = await self.darwin_storage.get_graph_triples(sample_doc)
+            await logger.info(
+                "darwin_graph_triples_sample",
+                action="darwin_graph_triples_sample",
+                chunk_uuid=sample_doc.chunk_uuid,
+                triple_count=len(triples),
+            )
 
     async def _clean_databases(self) -> None:
         """Clean existing data from MongoDB collections."""
@@ -916,6 +1055,22 @@ async def main() -> None:
         default=None,
         help="Comma-separated Google Docs IDs"
     )
+    parser.add_argument(
+        "--enable-darwinxml",
+        action="store_true",
+        help="Enable DarwinXML semantic wrapper for chunks"
+    )
+    parser.add_argument(
+        "--darwinxml-validate",
+        action="store_true",
+        default=True,
+        help="Validate DarwinXML documents (default: True)"
+    )
+    parser.add_argument(
+        "--darwinxml-strict",
+        action="store_true",
+        help="Enable strict validation mode (warnings become errors)"
+    )
 
     args = parser.parse_args()
 
@@ -928,7 +1083,10 @@ async def main() -> None:
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
         max_chunk_size=args.chunk_size * 2,
-        max_tokens=args.max_tokens
+        max_tokens=args.max_tokens,
+        enable_darwinxml=args.enable_darwinxml,
+        darwinxml_validate=args.darwinxml_validate,
+        darwinxml_strict=args.darwinxml_strict,
     )
 
     # Create and run pipeline - clean by default unless --no-clean is specified
