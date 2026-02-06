@@ -9,11 +9,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from mdrag.ingestion.docling.processor import DocumentProcessor  # type: ignore[import-not-found]
-from mdrag.ingestion.ingest import DocumentIngestionPipeline, IngestionConfig  # type: ignore[import-not-found]
-from mdrag.integrations.google_drive import GoogleDriveService  # type: ignore[import-not-found]
-from mdrag.ingestion.sources.google_drive_source import GoogleDriveServiceAdapter  # type: ignore[import-not-found]
-from mdrag.mdrag_logging.service_logging import get_logger  # type: ignore[import-not-found]
+from mdrag.ingestion.ingest import IngestionWorkflow
+from mdrag.ingestion.models import GoogleDriveCollectionRequest, IngestionConfig
+from mdrag.ingestion.sources import GoogleDriveCollector
+from mdrag.mdrag_logging.service_logging import get_logger
+from mdrag.settings import load_settings
 
 DEFAULT_FILE_ID = "1h7HGpc41HzOHtdcXs6YLpBojYLHVEWxeOAZQTTw7qds"
 SCRIPT_DIR = Path(__file__).parent
@@ -35,50 +35,32 @@ def _parse_args() -> argparse.Namespace:
 async def _run() -> None:
     load_dotenv(SCRIPT_DIR.parent.parent / ".env")
     args = _parse_args()
-    pipeline = DocumentIngestionPipeline(
-        config=IngestionConfig(),
-        documents_folder="documents",
-        clean_before_ingest=False,
-    )
-
-    missing = [
-        name
-        for name in (
-            "GDOC_CLIENT",
-            "GDOC_TOKEN",
-        )
-        if not os.getenv(name)
-    ]
-    if missing:
+    settings = load_settings()
+    if not settings.google_service_account_file:
         await logger.warning(
-            "Missing Google Drive credentials. Set these env vars in sample/.env: "
-            + ", ".join(missing)
+            "Missing Google service account credentials. Set GOOGLE_SERVICE_ACCOUNT_FILE."
         )
         return
 
-    gdrive_service = GoogleDriveService(
-        credentials_json=os.getenv("GDOC_CLIENT"),
-        token_json=os.getenv("GDOC_TOKEN"),
-    )
-    pipeline.processor = DocumentProcessor(
-        settings=pipeline.settings,
-        drive_client=GoogleDriveServiceAdapter(gdrive_service),
-    )
-
-    await pipeline.initialize()
+    workflow = IngestionWorkflow(config=IngestionConfig(), settings=settings)
+    await workflow.initialize()
     try:
-        processed = await pipeline.processor.process_google_file(args.file_id)
-        result = await pipeline._ingest_processed_document(processed)
-        print("Ingestion complete")
-        print(f"Document ID: {result.document_id}")
-        print(f"Title: {result.title}")
-        print(f"Chunks created: {result.chunks_created}")
-        if result.errors:
-            print("Errors:")
-            for error in result.errors:
-                print(f"- {error}")
+        collector = GoogleDriveCollector(settings=settings)
+        results = await workflow.ingest_collector(
+            collector,
+            GoogleDriveCollectionRequest(file_ids=[args.file_id]),
+        )
+        for result in results:
+            print("Ingestion complete")
+            print(f"Document UID: {result.document_uid}")
+            print(f"Title: {result.title}")
+            print(f"Chunks created: {result.chunks_created}")
+            if result.errors:
+                print("Errors:")
+                for error in result.errors:
+                    print(f"- {error}")
     finally:
-        await pipeline.close()
+        await workflow.close()
 
 
 if __name__ == "__main__":

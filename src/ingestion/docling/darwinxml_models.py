@@ -17,6 +17,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from mdrag.ingestion.models import GraphTriple
+
 
 class AnnotationType(str, Enum):
     """Types of annotations supported in DarwinXML."""
@@ -142,8 +144,13 @@ class ProvenanceMetadata(BaseModel):
     ingestion_timestamp: str = Field(
         default_factory=lambda: datetime.now().isoformat()
     )
+    document_uid: Optional[str] = None
     source_url: str
     source_type: str
+    source_id: Optional[str] = None
+    source_group: Optional[str] = None
+    user_id: Optional[str] = None
+    org_id: Optional[str] = None
     crawl_session_id: Optional[str] = None
     validation_status: ValidationStatus = ValidationStatus.UNVALIDATED
     processor_version: str = "docling-2.14"
@@ -243,48 +250,85 @@ class DarwinXMLDocument(BaseModel):
 
         return tostring(root, encoding="unicode")
 
-    def extract_graph_triples(self) -> List[Dict[str, str]]:
+    def extract_graph_triples(
+        self,
+        *,
+        include_provenance: bool = True,
+        include_tags: bool = True,
+    ) -> List[GraphTriple]:
         """
         Extract graph triples for Neo4j ingestion.
 
-        Returns:
-            List of (subject, predicate, object) triples
-        """
-        triples = []
+        Args:
+            include_provenance: Whether to include provenance triples.
+            include_tags: Whether to include tag relationships.
 
-        # Document -> Chunk relationship
+        Returns:
+            List of graph triples.
+        """
+        triples: List[GraphTriple] = []
+
         triples.append(
-            {
-                "subject": self.document_title,
-                "predicate": "HAS_CHUNK",
-                "object": self.chunk_uuid,
-                "properties": {"chunk_index": self.chunk_index},
-            }
+            GraphTriple(
+                subject=self.document_title,
+                predicate="HAS_CHUNK",
+                object=self.chunk_uuid,
+                properties={
+                    "chunk_index": self.chunk_index,
+                    "document_uid": self.provenance.document_uid,
+                },
+            )
         )
 
-        # Extract all relationships from annotations
         for ann in self.annotations:
             for rel in ann.relationships:
                 triples.append(
-                    {
-                        "subject": rel.source_id,
-                        "predicate": rel.type.value.upper(),
-                        "object": rel.target_id,
-                        "properties": rel.properties,
-                    }
+                    GraphTriple(
+                        subject=rel.source_id,
+                        predicate=rel.type.value.upper(),
+                        object=rel.target_id,
+                        properties=rel.properties,
+                    )
                 )
 
-            # Extract entity relationships from attributes
             for attr in ann.attributes:
                 if attr.type == AttributeType.ENTITY:
                     triples.append(
-                        {
-                            "subject": self.chunk_uuid,
-                            "predicate": "MENTIONS",
-                            "object": attr.value,
-                            "properties": {"confidence": attr.confidence},
-                        }
+                        GraphTriple(
+                            subject=self.chunk_uuid,
+                            predicate="MENTIONS",
+                            object=attr.value,
+                            properties={"confidence": attr.confidence},
+                        )
                     )
+
+        if include_provenance:
+            triples.append(
+                GraphTriple(
+                    subject=self.chunk_uuid,
+                    predicate="HAS_PROVENANCE",
+                    object=f"provenance:{self.provenance.content_hash}",
+                    properties={
+                        "source_url": self.provenance.source_url,
+                        "source_type": self.provenance.source_type,
+                        "source_id": self.provenance.source_id,
+                        "document_uid": self.provenance.document_uid,
+                        "ingestion_timestamp": self.provenance.ingestion_timestamp,
+                        "validation_status": self.provenance.validation_status.value,
+                    },
+                )
+            )
+
+        if include_tags:
+            for tag in self.provenance.tags:
+                triples.append(
+                    GraphTriple(
+                        subject=self.chunk_uuid,
+                        predicate="HAS_TAG",
+                        object=f"tag:{tag}",
+                        properties={},
+                    )
+                )
 
         return triples
 

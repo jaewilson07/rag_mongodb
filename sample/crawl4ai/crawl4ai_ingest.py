@@ -5,10 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 
-from mdrag.ingestion.ingest import DocumentIngestionPipeline, IngestionConfig  # type: ignore[import-not-found]
-from mdrag.ingestion.sources.crawl4ai_source import (  # type: ignore[import-not-found]
-    Crawl4AIIngestionSource,
-)
+from mdrag.ingestion.ingest import IngestionWorkflow
+from mdrag.ingestion.models import IngestionConfig, WebCollectionRequest
+from mdrag.ingestion.sources import Crawl4AICollector
 
 DEFAULT_URL = "https://example.com"
 
@@ -29,43 +28,34 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Maximum depth for deep crawl",
     )
-    parser.add_argument(
-        "--page-index",
-        type=int,
-        default=0,
-        help="Select which page to ingest from a deep crawl",
-    )
     return parser.parse_args()
 
 
 async def _run() -> None:
     args = _parse_args()
-    pipeline = DocumentIngestionPipeline(
-        config=IngestionConfig(),
-        documents_folder="documents",
-        clean_before_ingest=False,
-    )
-
-    await pipeline.initialize()
+    workflow = IngestionWorkflow(config=IngestionConfig())
+    await workflow.initialize()
     try:
-        source = Crawl4AIIngestionSource(
-            url=args.url,
-            deep=bool(args.deep),
-            max_depth=args.max_depth,
-            page_index=args.page_index,
+        collector = Crawl4AICollector()
+        results = await workflow.ingest_collector(
+            collector,
+            WebCollectionRequest(
+                url=args.url,
+                deep=bool(args.deep),
+                max_depth=args.max_depth,
+            ),
         )
-        processed = source.fetch_and_convert()
-        result = await pipeline._ingest_processed_document(processed)
-        print("Ingestion complete")
-        print(f"Document ID: {result.document_id}")
-        print(f"Title: {result.title}")
-        print(f"Chunks created: {result.chunks_created}")
-        if result.errors:
-            print("Errors:")
-            for error in result.errors:
-                print(f"- {error}")
+        for result in results:
+            print("Ingestion complete")
+            print(f"Document UID: {result.document_uid}")
+            print(f"Title: {result.title}")
+            print(f"Chunks created: {result.chunks_created}")
+            if result.errors:
+                print("Errors:")
+                for error in result.errors:
+                    print(f"- {error}")
     finally:
-        await pipeline.close()
+        await workflow.close()
 
 
 if __name__ == "__main__":

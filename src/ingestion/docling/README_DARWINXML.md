@@ -35,13 +35,13 @@ wrapper = DarwinXMLWrapper(
 # Wrap single chunk
 darwin_doc = wrapper.wrap_chunk(
     chunk=docling_chunk,
-    document_id="doc_123",
+    document_uid="doc_123",
 )
 
 # Wrap batch (preserves hierarchy)
 darwin_docs = wrapper.wrap_chunks_batch(
     chunks=docling_chunks,
-    document_id="doc_123",
+    document_uid="doc_123",
 )
 
 # Validate

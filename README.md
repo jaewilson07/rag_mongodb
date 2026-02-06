@@ -8,7 +8,7 @@ Agentic RAG system combining MongoDB Atlas Vector Search with Pydantic AI for in
   - Manual RRF implementation provides same quality as MongoDB's `$rankFusion` (which is in preview)
   - Concurrent execution for minimal latency overhead
 - **Multi-Format Ingestion**: PDF, Word, PowerPoint, Excel, HTML, Markdown, Audio transcription
-- **Intelligent Chunking**: Docling HybridChunker preserves document structure and semantic boundaries
+- **Intelligent Chunking**: Docling HierarchicalChunker preserves document structure and semantic boundaries
 - **Conversational CLI**: Rich-based interface with real-time streaming and tool call visibility
 - **Multiple LLM Support**: OpenAI, OpenRouter, Ollama, Gemini
 - **Cost Effective**: Runs entirely on MongoDB Atlas free tier (M0)
@@ -313,7 +313,7 @@ MongoDB-RAG-Agent/
 │   ├── prompts.py                # ✅ System prompts
 │   └── ingestion/
 │       ├── docling/
-│       │   ├── chunker.py         # ✅ Docling HybridChunker wrapper
+│       │   ├── chunker.py         # ✅ Docling HierarchicalChunker wrapper
 │       │   └── processor.py       # ✅ Docling document conversion
 │       ├── embedder.py            # ✅ Batch embedding generation
 │       └── ingest.py              # ✅ MongoDB ingestion pipeline

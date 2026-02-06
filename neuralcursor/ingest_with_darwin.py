@@ -5,11 +5,9 @@ Ingests documents through the Docling pipeline with DarwinXML semantic wrapper,
 then stores them in the NeuralCursor brain (Neo4j + MongoDB).
 """
 
-import asyncio
 import argparse
-import logging
+import asyncio
 from pathlib import Path
-from typing import List, Optional
 
 # Add src to path for imports
 import sys
@@ -18,7 +16,9 @@ sys.path.insert(0, '/workspace/src')
 from dotenv import load_dotenv
 
 from ingestion.docling.chunker import ChunkingConfig, create_chunker
-from ingestion.docling.processor import DocumentProcessor
+from ingestion.docling.processor import DoclingProcessor
+from ingestion.models import UploadCollectionRequest
+from ingestion.sources.upload_source import UploadCollector
 from ingestion.embedder import create_embedder
 from ingestion.docling.darwinxml_wrapper import DarwinXMLWrapper
 from ingestion.docling.darwinxml_validator import DarwinXMLValidator, ValidationStatus
@@ -66,7 +66,8 @@ class NeuralCursorIngestion:
         self.chunker_config = ChunkingConfig(max_tokens=512)
         self.chunker = create_chunker(self.chunker_config)
         self.embedder = create_embedder()
-        self.processor = DocumentProcessor(settings=settings)
+        self.processor = DoclingProcessor(settings=settings)
+        self.collector = UploadCollector()
         
         # DarwinXML components
         self.darwin_wrapper = DarwinXMLWrapper(
@@ -102,39 +103,50 @@ class NeuralCursorIngestion:
             extra={"file_path": str(file_path)},
         )
         
-        # Process with Docling
-        result = await self.processor.process_document(str(file_path))
-        
-        if not result or not result.markdown_content:
+        # Collect source + process with Docling
+        request = UploadCollectionRequest(
+            filename=file_path.name,
+            file_path=str(file_path),
+        )
+        sources = await self.collector.collect(request)
+        if not sources:
             logger.warning(
                 "neuralcursor_ingest_file_failed",
-                extra={"file_path": str(file_path), "reason": "no_content"},
+                extra={"file_path": str(file_path), "reason": "no_source"},
+            )
+            return {"success": False, "file": str(file_path), "error": "No source"}
+
+        document = await self.processor.convert_source(sources[0])
+        document_uid = document.metadata.identity.document_uid
+
+        if not document.content.strip():
+            logger.warning(
+                "neuralcursor_ingest_file_failed",
+                extra={
+                    "file_path": str(file_path),
+                    "document_uid": document_uid,
+                    "reason": "no_content",
+                },
             )
             return {"success": False, "file": str(file_path), "error": "No content"}
-        
+
         # Chunk the document
-        chunks = await self.chunker.chunk_document(
-            content=result.markdown_content,
-            title=file_path.stem,
-            source=str(file_path),
-            docling_doc=result.docling_document,
-            metadata={
-                "source_type": "upload",
-                "document_title": file_path.stem,
-            },
-        )
+        chunks = await self.chunker.chunk_document(document=document)
         
         if not chunks:
             logger.warning(
                 "neuralcursor_ingest_file_no_chunks",
-                extra={"file_path": str(file_path)},
+                extra={
+                    "file_path": str(file_path),
+                    "document_uid": document_uid,
+                },
             )
             return {"success": False, "file": str(file_path), "error": "No chunks"}
         
         # Wrap chunks with DarwinXML
         darwin_docs = self.darwin_wrapper.wrap_chunks_batch(
             chunks=chunks,
-            document_id=str(file_path),
+            document_uid=document_uid,
             validation_status=ValidationStatus.UNVALIDATED,
             additional_tags=["neuralcursor", "ingestion"],
         )
@@ -153,6 +165,7 @@ class NeuralCursorIngestion:
                     logger.warning(
                         "neuralcursor_validation_failed",
                         extra={
+                            "document_uid": document_uid,
                             "chunk_uuid": darwin_doc.chunk_uuid,
                             "errors": result.errors if result else [],
                         },
@@ -160,13 +173,49 @@ class NeuralCursorIngestion:
             
             darwin_docs = valid_docs
         
-        # Generate embeddings
-        texts = [chunk.content for chunk in chunks[:len(darwin_docs)]]
-        embeddings = await self.embedder.embed_batch(texts)
+        # Align chunks with validated DarwinXML docs
+        chunk_map = {chunk.index: chunk for chunk in chunks}
+        aligned_docs = []
+        aligned_chunks = []
+        for darwin_doc in darwin_docs:
+            chunk = chunk_map.get(darwin_doc.chunk_index)
+            if not chunk:
+                logger.warning(
+                    "neuralcursor_chunk_missing",
+                    extra={
+                        "document_uid": document_uid,
+                        "chunk_index": darwin_doc.chunk_index,
+                    },
+                )
+                continue
+            aligned_docs.append(darwin_doc)
+            aligned_chunks.append(chunk)
+
+        if not aligned_docs:
+            logger.warning(
+                "neuralcursor_ingest_file_no_valid_chunks",
+                extra={
+                    "file_path": str(file_path),
+                    "document_uid": document_uid,
+                },
+            )
+            return {
+                "success": False,
+                "file": str(file_path),
+                "error": "No valid chunks",
+            }
+
+        # Generate embeddings with Docling metadata preserved
+        embedded_chunks = await self.embedder.embed_chunks(aligned_chunks)
+        embeddings = []
+        for chunk in embedded_chunks:
+            if chunk.embedding is None:
+                raise ValueError("Missing embedding for chunk")
+            embeddings.append(chunk.embedding)
         
         # Ingest into NeuralCursor brain
         stats = await self.bridge.ingest_darwin_documents_batch(
-            darwin_docs=darwin_docs,
+            darwin_docs=aligned_docs,
             embeddings=embeddings,
         )
         
@@ -174,7 +223,8 @@ class NeuralCursorIngestion:
             "neuralcursor_ingest_file_complete",
             extra={
                 "file_path": str(file_path),
-                "chunks": len(darwin_docs),
+                "document_uid": document_uid,
+                "chunks": len(aligned_docs),
                 "para_nodes": stats.para_nodes_created,
                 "relationships": stats.relationships_created,
             },
@@ -183,7 +233,8 @@ class NeuralCursorIngestion:
         return {
             "success": True,
             "file": str(file_path),
-            "chunks": len(darwin_docs),
+            "document_uid": document_uid,
+            "chunks": len(aligned_docs),
             "para_nodes": stats.para_nodes_created,
             "relationships": stats.relationships_created,
             "errors": stats.errors,

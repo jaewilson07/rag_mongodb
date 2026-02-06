@@ -6,10 +6,9 @@ import argparse
 import asyncio
 from pathlib import Path
 
-from mdrag.ingestion.ingest import DocumentIngestionPipeline, IngestionConfig  # type: ignore[import-not-found]
-from mdrag.ingestion.sources.upload_source import (  # type: ignore[import-not-found]
-    UploadIngestionSource,
-)
+from mdrag.ingestion.ingest import IngestionWorkflow
+from mdrag.ingestion.models import IngestionConfig, UploadCollectionRequest
+from mdrag.ingestion.sources import UploadCollector
 
 DEFAULT_FILE = Path(__file__).resolve().parent / "pydantic.txt"
 
@@ -28,27 +27,29 @@ def _parse_args() -> argparse.Namespace:
 
 async def _run() -> None:
     args = _parse_args()
-    pipeline = DocumentIngestionPipeline(
-        config=IngestionConfig(),
-        documents_folder="documents",
-        clean_before_ingest=False,
-    )
-
-    await pipeline.initialize()
+    workflow = IngestionWorkflow(config=IngestionConfig())
+    await workflow.initialize()
     try:
-        source = UploadIngestionSource(file_path=args.file_path)
-        processed = source.fetch_and_convert()
-        result = await pipeline._ingest_processed_document(processed)
-        print("Ingestion complete")
-        print(f"Document ID: {result.document_id}")
-        print(f"Title: {result.title}")
-        print(f"Chunks created: {result.chunks_created}")
-        if result.errors:
-            print("Errors:")
-            for error in result.errors:
-                print(f"- {error}")
+        collector = UploadCollector()
+        results = await workflow.ingest_sources(
+            await collector.collect(
+                UploadCollectionRequest(
+                    filename=Path(args.file_path).name,
+                    file_path=args.file_path,
+                )
+            )
+        )
+        for result in results:
+            print("Ingestion complete")
+            print(f"Document UID: {result.document_uid}")
+            print(f"Title: {result.title}")
+            print(f"Chunks created: {result.chunks_created}")
+            if result.errors:
+                print("Errors:")
+                for error in result.errors:
+                    print(f"- {error}")
     finally:
-        await pipeline.close()
+        await workflow.close()
 
 
 if __name__ == "__main__":

@@ -1,94 +1,157 @@
-"""Google Drive ingestion source implementing the IngestionSource protocol."""
+"""Google Drive collector implementing the SourceCollector protocol."""
 
-import asyncio
-import io
-from typing import Any
+from __future__ import annotations
 
-from googleapiclient.http import MediaIoBaseDownload
+from typing import List
 
-from .ingestion_source import IngestionSource
-from ..docling.processor import DocumentProcessor, ProcessedDocument
-from ...settings import load_settings
-from ...integrations.google_drive.service import GoogleDriveService
+from mdrag.ingestion.models import (
+    CollectedSource,
+    GoogleDriveCollectionRequest,
+    SourceContent,
+    SourceContentKind,
+    ingestion_timestamp,
+)
+from mdrag.ingestion.protocols import SourceCollector
+from mdrag.integrations.google_drive import (
+    AsyncGoogleDriveClient,
+    GOOGLE_DOC_MIME_TYPE,
+    GOOGLE_PDF_EXPORT,
+    GOOGLE_SLIDES_MIME_TYPE,
+)
+from mdrag.integrations.models import SourceFrontmatter
+from mdrag.mdrag_logging.service_logging import get_logger
+from mdrag.settings import Settings, load_settings
 
-
-class GoogleDriveServiceAdapter:
-    """Adapter to provide the async drive client interface via GoogleDriveService."""
-
-    def __init__(self, service: GoogleDriveService) -> None:
-        self.service = service
-
-    async def get_file(self, file_id: str, fields: str = "*") -> dict[str, Any]:
-        return await self.service.api.get_file_metadata(file_id, fields=fields)
-
-    async def export_file(self, file_id: str, mime_type: str) -> bytes:
-        request = await self.service.api.export_as_media(file_id, mime_type)
-
-        def _download_sync() -> bytes:
-            file_content = io.BytesIO()
-            downloader = MediaIoBaseDownload(file_content, request)
-            done = False
-            while not done:
-                _status, done = downloader.next_chunk()
-            return file_content.getvalue()
-
-        return await asyncio.to_thread(_download_sync)
-
-    async def download_file(self, file_id: str) -> bytes:
-        return await self.service.download_file(file_id)
-
-    async def list_files_in_folder(self, folder_id: str) -> list[dict[str, str]]:
-        results = await self.service.api.execute_query(
-            query=f"'{folder_id}' in parents and trashed=false",
-            fields="files(id, name, mimeType, webViewLink)",
-            page_size=1000,
-            order_by="modifiedTime desc",
-        )
-        return results.get("files", [])
+logger = get_logger(__name__)
 
 
-class GoogleDriveIngestionSource(IngestionSource):
+class GoogleDriveCollector(SourceCollector[GoogleDriveCollectionRequest]):
+    """Collect Google Drive content for ingestion."""
+
+    name = "gdrive"
+
     def __init__(
         self,
-        file_id: str,
-        namespace: dict[str, Any] | None = None,
-        *,
-        gdrive_service: GoogleDriveService | None = None,
-        credentials_json: str | None = None,
-        token_json: str | None = None,
+        drive_client: AsyncGoogleDriveClient | None = None,
+        settings: Settings | None = None,
     ) -> None:
-        self.file_id = file_id
-        self.namespace = namespace or {}
-        self.settings = load_settings()
+        self.settings = settings or load_settings()
+        self.drive_client = drive_client
 
-        service = gdrive_service or GoogleDriveService(
-            credentials_json=credentials_json,
-            token_json=token_json,
-        )
-        self.gdrive_service = service
-        self.processor = DocumentProcessor(
-            self.settings,
-            drive_client=GoogleDriveServiceAdapter(service),
-        )
-
-    def fetch_and_convert(self, **kwargs) -> ProcessedDocument:
-        """
-        Fetches a Google Drive file and returns a ProcessedDocument for ingestion.
-        """
-        # This is a sync wrapper for the async processor
-        import asyncio
-        import concurrent.futures
-
-        async def _run() -> ProcessedDocument:
-            return await self.processor.process_google_file(
-                self.file_id,
-                self.namespace,
+    async def collect(
+        self, request: GoogleDriveCollectionRequest
+    ) -> List[CollectedSource]:
+        """Collect Drive sources and normalize for ingestion."""
+        if not self.settings.google_service_account_file:
+            await logger.warning(
+                "collector_gdrive_missing_credentials",
+                action="collector_gdrive_missing_credentials",
             )
+            return []
 
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(_run())
+        await logger.info(
+            "collector_gdrive_start",
+            action="collector_gdrive_start",
+            file_ids=len(request.file_ids),
+            folder_ids=len(request.folder_ids),
+            doc_ids=len(request.doc_ids),
+        )
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(lambda: asyncio.run(_run())).result()
+        client = self._get_drive_client()
+        file_ids = list(request.file_ids) + list(request.doc_ids)
+
+        for folder_id in request.folder_ids:
+            try:
+                files = await client.list_files_in_folder(folder_id)
+                file_ids.extend([file.get("id") for file in files if file.get("id")])
+            except Exception as exc:
+                await logger.error(
+                    "collector_gdrive_folder_failed",
+                    action="collector_gdrive_folder_failed",
+                    folder_id=folder_id,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+
+        collected: List[CollectedSource] = []
+        seen: set[str] = set()
+        for file_id in file_ids:
+            if not file_id or file_id in seen:
+                continue
+            seen.add(file_id)
+            try:
+                metadata = await client.get_file(file_id)
+                name = metadata.get("name", file_id)
+                mime_type = metadata.get("mimeType", "")
+
+                if mime_type in {GOOGLE_DOC_MIME_TYPE, GOOGLE_SLIDES_MIME_TYPE}:
+                    file_bytes = await client.export_file(
+                        file_id,
+                        GOOGLE_PDF_EXPORT,
+                    )
+                    filename = f"{name}.pdf"
+                else:
+                    file_bytes = await client.download_file(file_id)
+                    filename = name
+
+                source_url = metadata.get("webViewLink") or (
+                    f"https://drive.google.com/file/d/{file_id}/view"
+                )
+
+                frontmatter = SourceFrontmatter(
+                    source_type="gdrive",
+                    source_url=source_url,
+                    source_title=name,
+                    source_id=file_id,
+                    source_mime_type=mime_type,
+                    source_web_view_url=metadata.get("webViewLink"),
+                    source_created_at=metadata.get("createdTime"),
+                    source_modified_at=metadata.get("modifiedTime"),
+                    source_etag=metadata.get("etag"),
+                    source_description=metadata.get("description"),
+                    source_owners=[
+                        owner.get("displayName", owner.get("emailAddress", "Unknown"))
+                        for owner in metadata.get("owners", [])
+                    ],
+                    source_fetched_at=ingestion_timestamp(),
+                )
+
+                collected.append(
+                    CollectedSource(
+                        frontmatter=frontmatter,
+                        content=SourceContent(
+                            kind=SourceContentKind.BYTES,
+                            data=file_bytes,
+                            filename=filename,
+                            mime_type=mime_type,
+                        ),
+                        metadata={"gdrive": metadata},
+                        namespace=request.namespace,
+                    )
+                )
+            except Exception as exc:
+                await logger.error(
+                    "collector_gdrive_file_failed",
+                    action="collector_gdrive_file_failed",
+                    file_id=file_id,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+
+        await logger.info(
+            "collector_gdrive_complete",
+            action="collector_gdrive_complete",
+            collected_count=len(collected),
+        )
+        return collected
+
+    def _get_drive_client(self) -> AsyncGoogleDriveClient:
+        if not self.drive_client:
+            self.drive_client = AsyncGoogleDriveClient(
+                self.settings.google_service_account_file,
+                subject=self.settings.google_impersonate_subject,
+            )
+        return self.drive_client
+
+
+__all__ = ["GoogleDriveCollector"]

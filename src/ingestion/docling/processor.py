@@ -1,13 +1,12 @@
-"""Document processing utilities for Docling-based ingestion."""
+"""Docling conversion utilities for ingestion."""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
 import tempfile
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
@@ -15,402 +14,215 @@ from urllib.parse import urlparse
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc.document import DoclingDocument
 
-from mdrag.ingestion.models import MetadataPassport
-from mdrag.integrations.crawl4ai import Crawl4AIClient
-from mdrag.integrations.google_drive import (
-    AsyncGoogleDriveClient,
-    GOOGLE_DOC_MIME_TYPE,
-    GOOGLE_PDF_EXPORT,
-    GOOGLE_SLIDES_MIME_TYPE,
+from pydantic import BaseModel
+
+from mdrag.ingestion.models import (
+    CollectedSource,
+    DocumentIdentity,
+    IngestionDocument,
+    IngestionMetadata,
+    Namespace,
+    SourceContent,
+    SourceContentKind,
+    ingestion_timestamp,
 )
-from mdrag.mdrag_logging.service_logging import get_logger, log_async
+from mdrag.mdrag_logging.service_logging import get_logger
 from mdrag.settings import Settings
 
 logger = get_logger(__name__)
 
 
-@dataclass
-class ProcessedDocument:
-    """Result of processing a single document source."""
+class _MaterializedContent(BaseModel):
+    """Internal helper for content materialization."""
 
-    content: str
-    docling_document: DoclingDocument
-    docling_json: Dict[str, Any]
-    page_texts: Dict[str, str]
-    title: str
-    source_type: str
-    source_url: str
+    path: str
     content_hash: str
-    metadata: Dict[str, Any]
+    cleanup: bool
 
 
-class DocumentProcessor:
-    """Convert ingestion sources into Docling documents and markdown."""
+class DoclingProcessor:
+    """Convert collected sources into Docling documents and markdown."""
 
-    def __init__(
-        self,
-        settings: Settings,
-        crawl_client: Crawl4AIClient | None = None,
-        drive_client: AsyncGoogleDriveClient | None = None,
-    ) -> None:
+    def __init__(self, settings: Settings) -> None:
+        """Initialize the Docling processor.
+
+        Args:
+            settings: Application settings.
+        """
         self.settings = settings
-        self.crawl_client = crawl_client or Crawl4AIClient()
-        self._drive_client = drive_client
 
-    async def process_web_url(
-        self,
-        url: str,
-        deep: bool = False,
-        max_depth: Optional[int] = None,
-        namespace: Optional[Dict[str, Any]] = None,
-    ) -> list[ProcessedDocument]:
-        """Fetch a URL with Crawl4AI and convert raw HTML to Docling."""
+    async def convert_source(self, source: CollectedSource) -> IngestionDocument:
+        """Convert a collected source into an ingestion document.
+
+        Args:
+            source: Collected source payload.
+
+        Returns:
+            IngestionDocument ready for chunking.
+
+        Raises:
+            ValueError: If Docling cannot process the source content.
+        """
         await logger.info(
-            "docling_process_web_start",
-            action="docling_process_web_start",
-            url=url,
-            deep=deep,
-            max_depth=max_depth,
+            "docling_convert_start",
+            action="docling_convert_start",
+            source_type=source.frontmatter.source_type,
+            source_url=source.frontmatter.source_url,
         )
-        if deep:
-            pages = await self.crawl_client.crawl_deep(
-                start_url=url,
-                max_depth=max_depth or self.settings.crawl4ai_max_depth,
-                word_count_threshold=self.settings.crawl4ai_word_count_threshold,
-                remove_overlay_elements=self.settings.crawl4ai_remove_overlay_elements,
-                remove_base64_images=self.settings.crawl4ai_remove_base64_images,
-                cache_mode=self.settings.crawl4ai_cache_mode,
-                browser_type=self.settings.crawl4ai_browser_type,
-                timeout=self.settings.crawl4ai_timeout,
-                cookies=self.settings.crawl4ai_cookies,
-                user_agent=self.settings.crawl4ai_user_agent,
-            )
-        else:
-            page = await self.crawl_client.crawl_single_page(
-                url=url,
-                word_count_threshold=self.settings.crawl4ai_word_count_threshold,
-                remove_overlay_elements=self.settings.crawl4ai_remove_overlay_elements,
-                remove_base64_images=self.settings.crawl4ai_remove_base64_images,
-                cache_mode=self.settings.crawl4ai_cache_mode,
-                browser_type=self.settings.crawl4ai_browser_type,
-                timeout=self.settings.crawl4ai_timeout,
-                cookies=self.settings.crawl4ai_cookies,
-                user_agent=self.settings.crawl4ai_user_agent,
-            )
-            pages = [page] if page else []
-
-        processed: list[ProcessedDocument] = []
-        for page in pages:
-            if not page:
-                continue
-            html = page.html or page.content or ""
-            if not html.strip():
-                await logger.warning(
-                    "crawl4ai_empty_html",
-                    action="crawl4ai_empty_html",
-                    url=page.frontmatter.source_url,
-                )
-                continue
-
-            page_url = page.frontmatter.source_url or url
-            metadata = {
-                "crawl_metadata": page.metadata or {},
-                "crawl_url": page_url,
-                "crawl_start_url": url if deep else None,
-                "frontmatter": page.frontmatter.to_frontmatter_dict(),
-            }
-            metadata.update(self._default_namespace(url, namespace, fallback_group="web"))
-            processed.append(
-                self._process_html(
-                    html=html,
-                    source_url=page_url,
-                    title_hint=page.frontmatter.source_title,
-                    extra_metadata=metadata,
-                )
-            )
-
-        await logger.info(
-            "docling_process_web_complete",
-            action="docling_process_web_complete",
-            url=url,
-            processed_count=len(processed),
-        )
-        return processed
-
-    async def process_google_file(
-        self,
-        file_id: str,
-        namespace: Optional[Dict[str, Any]] = None,
-    ) -> ProcessedDocument:
-        """Fetch and convert a Google Drive file ID into Docling."""
-        await logger.info(
-            "docling_process_gdrive_start",
-            action="docling_process_gdrive_start",
-            file_id=file_id,
-        )
-        client = self._get_drive_client()
-
-        metadata = await client.get_file(file_id)
-        name = metadata.get("name", file_id)
-        mime_type = metadata.get("mimeType", "")
-
-        if mime_type in {GOOGLE_DOC_MIME_TYPE, GOOGLE_SLIDES_MIME_TYPE}:
-            file_bytes = await client.export_file(
-                file_id,
-                GOOGLE_PDF_EXPORT,
-            )
-            filename = f"{name}.pdf"
-        else:
-            file_bytes = await client.download_file(file_id)
-            filename = name
-
-        source_url = metadata.get("webViewLink") or (
-            f"https://drive.google.com/file/d/{file_id}/view"
-        )
-
-        extra_metadata = {
-            "gdrive_file_id": file_id,
-            "gdrive_name": name,
-            "gdrive_mime_type": mime_type,
-            "gdrive_modified_time": metadata.get("modifiedTime"),
-            "source_url": source_url,
-        }
-        extra_metadata.update(
-            self._default_namespace(source_url, namespace, fallback_group="gdrive")
-        )
-
-        processed = self._process_bytes(
-            file_bytes=file_bytes,
-            filename=filename,
-            source_type="gdrive",
-            source_url=source_url,
-            title_hint=name,
-            extra_metadata=extra_metadata,
-        )
-        await logger.info(
-            "docling_process_gdrive_complete",
-            action="docling_process_gdrive_complete",
-            file_id=file_id,
-            title=processed.title,
-        )
-        return processed
-
-    async def list_google_drive_files_in_folder(
-        self, folder_id: str
-    ) -> list[dict[str, str]]:
-        """List files in a Google Drive folder."""
-        client = self._get_drive_client()
-        files = await client.list_files_in_folder(folder_id)
-        await logger.info(
-            "docling_gdrive_folder_listed",
-            action="docling_gdrive_folder_listed",
-            folder_id=folder_id,
-            file_count=len(files),
-        )
-        return files
-
-    def process_local_file(
-        self,
-        file_path: str,
-        namespace: Optional[Dict[str, Any]] = None,
-    ) -> ProcessedDocument:
-        """Convert a local file path into Docling markdown."""
-        file_path = os.path.abspath(file_path)
-        source_url = f"file://{file_path}"
-        log_async(
-            logger,
-            "info",
-            "docling_process_local_start",
-            action="docling_process_local_start",
-            file_path=file_path,
-        )
-        with open(file_path, "rb") as handle:
-            file_bytes = handle.read()
-
-        extra_metadata = {"file_path": file_path}
-        extra_metadata.update(
-            self._default_namespace(source_url, namespace, fallback_group="upload")
-        )
-        processed = self._process_bytes(
-            file_bytes=file_bytes,
-            filename=os.path.basename(file_path),
-            source_type="upload",
-            source_url=source_url,
-            title_hint=os.path.basename(file_path),
-            extra_metadata=extra_metadata,
-        )
-        log_async(
-            logger,
-            "info",
-            "docling_process_local_complete",
-            action="docling_process_local_complete",
-            file_path=file_path,
-            title=processed.title,
-        )
-        return processed
-
-    def process_upload(
-        self,
-        file_bytes: bytes,
-        filename: str,
-        namespace: Optional[Dict[str, Any]] = None,
-    ) -> ProcessedDocument:
-        """Convert uploaded bytes into Docling markdown."""
-        source_url = f"upload://{filename}"
-        log_async(
-            logger,
-            "info",
-            "docling_process_upload_start",
-            action="docling_process_upload_start",
-            filename=filename,
-        )
-        extra_metadata = {}
-        extra_metadata.update(
-            self._default_namespace(source_url, namespace, fallback_group="upload")
-        )
-        processed = self._process_bytes(
-            file_bytes=file_bytes,
-            filename=filename,
-            source_type="upload",
-            source_url=source_url,
-            title_hint=filename,
-            extra_metadata=extra_metadata,
-        )
-        log_async(
-            logger,
-            "info",
-            "docling_process_upload_complete",
-            action="docling_process_upload_complete",
-            filename=filename,
-            title=processed.title,
-        )
-        return processed
-
-    def _process_html(
-        self,
-        html: str,
-        source_url: str,
-        title_hint: Optional[str],
-        extra_metadata: Dict[str, Any],
-    ) -> ProcessedDocument:
-        """Convert raw HTML to Docling markdown."""
-        content_hash = self._hash_bytes(html.encode("utf-8"))
-        with self._tempfile(suffix=".html") as temp_file:
-            temp_file.write(html.encode("utf-8"))
-            temp_file.flush()
-            return self._convert_docling(
-                file_path=temp_file.name,
-                source_type="web",
-                source_url=source_url,
-                title_hint=title_hint or source_url,
-                content_hash=content_hash,
-                extra_metadata=extra_metadata,
-            )
-
-    def _process_bytes(
-        self,
-        file_bytes: bytes,
-        filename: str,
-        source_type: str,
-        source_url: str,
-        title_hint: Optional[str],
-        extra_metadata: Dict[str, Any],
-    ) -> ProcessedDocument:
-        """Convert file bytes to Docling markdown."""
-        content_hash = self._hash_bytes(file_bytes)
-        suffix = Path(filename).suffix or ".bin"
-        if suffix.lower() == ".txt":
-            suffix = ".md"
-
-        with self._tempfile(suffix=suffix) as temp_file:
-            temp_file.write(file_bytes)
-            temp_file.flush()
-            return self._convert_docling(
-                file_path=temp_file.name,
-                source_type=source_type,
-                source_url=source_url,
-                title_hint=title_hint or filename,
-                content_hash=content_hash,
-                extra_metadata=extra_metadata,
-            )
-
-    def _convert_docling(
-        self,
-        file_path: str,
-        source_type: str,
-        source_url: str,
-        title_hint: str,
-        content_hash: str,
-        extra_metadata: Dict[str, Any],
-    ) -> ProcessedDocument:
+        materialized = await self._materialize_content(source.content)
         try:
+            docling_doc = await self._convert_docling(materialized.path)
+        finally:
+            if materialized.cleanup:
+                await self._cleanup_tempfile(materialized.path)
+
+        markdown = self._export_to_markdown(docling_doc)
+        title_hint = source.frontmatter.source_title or source.frontmatter.source_url or ""
+        title = self._extract_title(markdown, title_hint)
+
+        identity = DocumentIdentity.build(
+            source_type=source.frontmatter.source_type,
+            source_url=source.frontmatter.source_url,
+            content_hash=materialized.content_hash,
+            source_id=source.frontmatter.source_id,
+            source_mime_type=source.frontmatter.source_mime_type,
+        )
+        namespace = self._apply_default_namespace(
+            source.namespace,
+            source.frontmatter.source_url,
+            fallback_group=source.frontmatter.source_type,
+        )
+
+        source_mask = self._source_mask(identity.source_type)
+        frontmatter = source.frontmatter.model_copy(deep=True)
+        frontmatter.metadata = {
+            **frontmatter.metadata,
+            "document_uid": identity.document_uid,
+            "content_hash": identity.content_hash,
+            "source_group": namespace.source_group,
+            "user_id": namespace.user_id,
+            "org_id": namespace.org_id,
+            "source_mask": source_mask,
+            "document_title": title,
+        }
+
+        metadata = IngestionMetadata(
+            identity=identity,
+            namespace=namespace,
+            frontmatter=frontmatter,
+            collected_at=frontmatter.source_fetched_at or ingestion_timestamp(),
+            ingested_at=ingestion_timestamp(),
+            source_metadata={**source.metadata, "source_mask": source_mask},
+        )
+
+        ingestion_doc = IngestionDocument(
+            content=markdown,
+            docling_document=docling_doc,
+            docling_json=self._serialize_docling(docling_doc),
+            page_texts=self._extract_page_texts(docling_doc),
+            title=title,
+            metadata=metadata,
+        )
+
+        await logger.info(
+            "docling_convert_complete",
+            action="docling_convert_complete",
+            document_uid=identity.document_uid,
+            title=title,
+        )
+        return ingestion_doc
+
+    async def _materialize_content(self, content: SourceContent) -> _MaterializedContent:
+        """Materialize source content into a file for Docling conversion."""
+        if content.kind == SourceContentKind.FILE_PATH:
+            file_path = str(content.data)
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Source file not found: {file_path}")
+            content_hash = await asyncio.to_thread(self._hash_file, file_path)
+            return _MaterializedContent(
+                path=file_path,
+                content_hash=content_hash,
+                cleanup=False,
+            )
+
+        if isinstance(content.data, str):
+            data_bytes = content.data.encode("utf-8")
+        else:
+            data_bytes = content.data
+
+        content_hash = self._hash_bytes(data_bytes)
+        suffix = self._guess_suffix(content)
+        temp_path = await asyncio.to_thread(self._write_tempfile, data_bytes, suffix)
+        return _MaterializedContent(
+            path=temp_path,
+            content_hash=content_hash,
+            cleanup=True,
+        )
+
+    @staticmethod
+    def _guess_suffix(content: SourceContent) -> str:
+        """Determine an appropriate file suffix for Docling."""
+        if content.filename:
+            suffix = Path(content.filename).suffix
+            if suffix:
+                if suffix.lower() == ".txt":
+                    return ".md"
+                return suffix
+        if content.kind == SourceContentKind.HTML:
+            return ".html"
+        if content.kind == SourceContentKind.MARKDOWN:
+            return ".md"
+        if content.mime_type == "application/pdf":
+            return ".pdf"
+        return ".bin"
+
+    @staticmethod
+    def _write_tempfile(data: bytes, suffix: str) -> str:
+        """Write data to a temporary file and return the file path."""
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
+            handle.write(data)
+            handle.flush()
+            return handle.name
+
+    async def _cleanup_tempfile(self, path: str) -> None:
+        """Remove temporary files created for Docling conversion."""
+        try:
+            await asyncio.to_thread(os.remove, path)
+        except FileNotFoundError:
+            return
+
+    async def _convert_docling(self, file_path: str) -> DoclingDocument:
+        """Convert a file to a Docling document."""
+
+        def _convert() -> DoclingDocument:
             converter = DocumentConverter()
             result = converter.convert(file_path)
-            docling_doc = result.document
+            return result.document
+
+        try:
+            return await asyncio.to_thread(_convert)
         except Exception as exc:
             message = str(exc)
             if "unsupported" in message.lower():
-                log_async(
-                    logger,
-                    "error",
+                await logger.error(
                     "docling_unsupported_format",
                     action="docling_unsupported_format",
                     error=message,
                 )
                 raise ValueError("Docling unsupported format") from exc
             if "oom" in message.lower() or "out of memory" in message.lower():
-                log_async(
-                    logger,
-                    "error",
+                await logger.error(
                     "docling_oom",
                     action="docling_oom",
                     error=message,
                 )
                 raise MemoryError("Docling out of memory") from exc
-            log_async(
-                logger,
-                "error",
+            await logger.error(
                 "docling_conversion_failed",
                 action="docling_conversion_failed",
                 error=message,
             )
             raise
-
-        markdown = self._export_to_markdown(docling_doc)
-        title = self._extract_title(markdown, title_hint)
-
-        passport = MetadataPassport(
-            source_type=source_type,
-            source_url=source_url,
-            document_title=title,
-            page_number=None,
-            heading_path=[],
-            ingestion_timestamp=datetime.now().isoformat(),
-            content_hash=content_hash,
-        )
-
-        source_mask = self._source_mask(source_type)
-        metadata = {
-            **passport.model_dump(),
-            "source": source_url,
-            "file_size": len(markdown),
-            "line_count": len(markdown.split("\n")),
-            "word_count": len(markdown.split()),
-            "source_mask": source_mask,
-            **extra_metadata,
-        }
-
-        return ProcessedDocument(
-            content=markdown,
-            docling_document=docling_doc,
-            docling_json=self._serialize_docling(docling_doc),
-            page_texts=self._extract_page_texts(docling_doc),
-            title=title,
-            source_type=source_type,
-            source_url=source_url,
-            content_hash=content_hash,
-            metadata=metadata,
-        )
 
     @staticmethod
     def _export_to_markdown(docling_doc: DoclingDocument) -> str:
@@ -434,19 +246,26 @@ class DocumentProcessor:
 
     @staticmethod
     def _hash_bytes(data: bytes) -> str:
+        """Compute SHA-256 hash of bytes."""
         return hashlib.sha256(data).hexdigest()
 
     @staticmethod
+    def _hash_file(file_path: str) -> str:
+        """Compute SHA-256 hash for a file."""
+        hasher = hashlib.sha256()
+        with open(file_path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(8192), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
+    @staticmethod
     def _source_mask(source_type: str) -> int:
-        mapping = {
-            "web": 1,
-            "gdrive": 2,
-            "upload": 4,
-        }
+        mapping = {"web": 1, "gdrive": 2, "upload": 4}
         return mapping.get(source_type, 0)
 
     @staticmethod
     def _serialize_docling(docling_doc: DoclingDocument) -> Dict[str, Any]:
+        """Serialize Docling document to a JSON-friendly dict."""
         if hasattr(docling_doc, "model_dump"):
             try:
                 return docling_doc.model_dump(mode="json")
@@ -465,6 +284,7 @@ class DocumentProcessor:
 
     @staticmethod
     def _extract_page_texts(docling_doc: DoclingDocument) -> Dict[str, str]:
+        """Extract page-level markdown from Docling document."""
         page_texts: Dict[str, str] = {}
         pages = getattr(docling_doc, "pages", None)
         if not pages:
@@ -482,27 +302,18 @@ class DocumentProcessor:
         return page_texts
 
     @staticmethod
-    def _default_namespace(
+    def _apply_default_namespace(
+        namespace: Namespace,
         source_url: str,
-        namespace: Optional[Dict[str, Any]],
         fallback_group: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        namespace = namespace or {}
-        if namespace.get("source_group"):
+    ) -> Namespace:
+        """Apply default source group to namespace if missing."""
+        if namespace.source_group:
             return namespace
         parsed = urlparse(source_url)
         if parsed.hostname:
-            return {**namespace, "source_group": parsed.hostname}
-        return {**namespace, "source_group": fallback_group or ""}
+            return namespace.model_copy(update={"source_group": parsed.hostname})
+        return namespace.model_copy(update={"source_group": fallback_group or ""})
 
-    def _get_drive_client(self) -> AsyncGoogleDriveClient:
-        if not self._drive_client:
-            self._drive_client = AsyncGoogleDriveClient(
-                self.settings.google_service_account_file,
-                subject=self.settings.google_impersonate_subject,
-            )
-        return self._drive_client
 
-    @staticmethod
-    def _tempfile(suffix: str) -> Any:
-        return tempfile.NamedTemporaryFile(delete=True, suffix=suffix)
+__all__ = ["DoclingProcessor"]

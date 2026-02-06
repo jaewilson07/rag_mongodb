@@ -1,23 +1,33 @@
-"""Test that all ingestion sources implement the IngestionSource protocol."""
+"""Test that ingestion capabilities implement protocol contracts."""
 
-from mdrag.ingestion.sources.ingestion_source import IngestionSource
-from mdrag.ingestion.sources.crawl4ai_source import Crawl4AIIngestionSource
-from mdrag.ingestion.sources.google_drive_source import GoogleDriveIngestionSource
-from mdrag.ingestion.sources.searxng_source import SearXNGIngestionSource
-from mdrag.ingestion.sources.upload_source import UploadIngestionSource
-
-# Add other sources as you implement them
-ALL_SOURCES = [
-    GoogleDriveIngestionSource,
-    Crawl4AIIngestionSource,
-    SearXNGIngestionSource,
-    UploadIngestionSource,
-]
+from mdrag.ingestion.docling.processor import DoclingProcessor
+from mdrag.ingestion.protocols import IngestionProcessor, SourceCollector, StorageAdapter
+from mdrag.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
+from mdrag.ingestion.storage import MongoStorageAdapter
 
 
-def test_all_sources_implement_protocol():
-    for source_cls in ALL_SOURCES:
+def test_collectors_implement_protocol() -> None:
+    collectors = [
+        Crawl4AICollector,
+        GoogleDriveCollector,
+        UploadCollector,
+    ]
+    for collector_cls in collectors:
         assert issubclass(
-            source_cls,
-            IngestionSource,
-        ), f"{source_cls.__name__} does not implement IngestionSource protocol"
+            collector_cls,
+            SourceCollector,
+        ), f"{collector_cls.__name__} does not implement SourceCollector protocol"
+
+
+def test_processor_implements_protocol() -> None:
+    assert issubclass(
+        DoclingProcessor,
+        IngestionProcessor,
+    ), "DoclingProcessor does not implement IngestionProcessor protocol"
+
+
+def test_storage_implements_protocol() -> None:
+    assert issubclass(
+        MongoStorageAdapter,
+        StorageAdapter,
+    ), "MongoStorageAdapter does not implement StorageAdapter protocol"

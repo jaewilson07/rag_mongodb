@@ -3,31 +3,48 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
 from time import perf_counter
+from typing import Any, Dict
 
-from mdrag.ingestion.ingest import DocumentIngestionPipeline, IngestionConfig, IngestionResult
+from mdrag.ingestion.ingest import IngestionWorkflow
 from mdrag.ingestion.jobs.store import JobStatus, JobStore
-from mdrag.mdrag_logging.service_logging import get_logger
+from mdrag.ingestion.models import (
+    GoogleDriveCollectionRequest,
+    IngestionConfig,
+    IngestionResult,
+    Namespace,
+    UploadCollectionRequest,
+    WebCollectionRequest,
+)
+from mdrag.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
+from mdrag.mdrag_logging.service_logging import get_logger, log_async
 from mdrag.settings import Settings
 
 logger = get_logger(__name__)
 
 
 class IngestionService:
-    """Coordinate ingestion pipeline operations for job workers."""
+    """Coordinate ingestion workflow operations for job workers."""
 
     def __init__(self, settings: Settings) -> None:
+        """Initialize the ingestion service.
+
+        Args:
+            settings: Application settings.
+        """
         self.settings = settings
-        self.pipeline = DocumentIngestionPipeline(
+        self.workflow = IngestionWorkflow(
             config=IngestionConfig(),
-            documents_folder="documents",
-            clean_before_ingest=False,
+            settings=settings,
         )
 
-    async def run_job(self, job_id: str, payload: Dict[str, Any], job_store: JobStore) -> None:
-        from mdrag.ingestion.sources.ingestion_source import IngestionSource
-        from mdrag.ingestion.sources.google_drive_source import GoogleDriveIngestionSource
+    async def run_job(
+        self,
+        job_id: str,
+        payload: Dict[str, Any],
+        job_store: JobStore,
+    ) -> None:
+        """Run a single ingestion job."""
         source_type = payload.get("source_type")
         start_time = perf_counter()
         await logger.info(
@@ -36,66 +53,55 @@ class IngestionService:
             job_id=job_id,
             source_type=source_type,
         )
-        await self.pipeline.initialize()
 
         try:
+            await self.workflow.initialize()
+            results: list[IngestionResult] = []
+            namespace = Namespace(**(payload.get("namespace") or {}))
+
             if source_type == "web":
-                namespace = payload.get("namespace")
+                collector = Crawl4AICollector(settings=self.settings)
                 job_store.update_status(job_id, JobStatus.FETCHING_SOURCE)
-                job_store.update_status(job_id, JobStatus.DOCLING_PARSING)
-                job_store.update_status(job_id, JobStatus.INDEXING)
-                results = await self.pipeline._ingest_crawl4ai(
-                    urls=[payload["url"]],
-                    deep=bool(payload.get("deep")),
-                    max_depth=payload.get("max_depth"),
-                    namespace=namespace,
-                )
-            elif source_type == "gdrive":
-                namespace = payload.get("namespace")
-                job_store.update_status(job_id, JobStatus.FETCHING_SOURCE)
-                # Use protocol-based ingestion source
-                file_id = None
-                file_ids = payload.get("file_ids", [])
-                if file_ids:
-                    file_id = file_ids[0]
-                elif payload.get("doc_ids"):
-                    file_id = payload["doc_ids"][0]
-                if not file_id:
-                    raise ValueError("No Google Drive file_id provided for gdrive ingestion job")
-                # Instantiate and use the protocol
-                source: IngestionSource = GoogleDriveIngestionSource(file_id, namespace)
-                processed = source.fetch_and_convert()
-                # Now hand off to the pipeline for chunking/embedding
-                results = [
-                    await self.pipeline._ingest_processed_document(
-                        processed,
+                sources = await collector.collect(
+                    WebCollectionRequest(
+                        url=payload["url"],
+                        deep=bool(payload.get("deep")),
+                        max_depth=payload.get("max_depth"),
                         namespace=namespace,
                     )
-                ]
+                )
                 job_store.update_status(job_id, JobStatus.DOCLING_PARSING)
+                results = await self.workflow.ingest_sources(sources)
+                job_store.update_status(job_id, JobStatus.INDEXING)
+            elif source_type == "gdrive":
+                collector = GoogleDriveCollector(settings=self.settings)
+                job_store.update_status(job_id, JobStatus.FETCHING_SOURCE)
+                sources = await collector.collect(
+                    GoogleDriveCollectionRequest(
+                        file_ids=payload.get("file_ids", []),
+                        folder_ids=payload.get("folder_ids", []),
+                        doc_ids=payload.get("doc_ids", []),
+                        namespace=namespace,
+                    )
+                )
+                job_store.update_status(job_id, JobStatus.DOCLING_PARSING)
+                results = await self.workflow.ingest_sources(sources)
                 job_store.update_status(job_id, JobStatus.INDEXING)
             elif source_type == "upload":
-                namespace = payload.get("namespace")
+                collector = UploadCollector()
                 job_store.update_status(job_id, JobStatus.DOCLING_PARSING)
-                job_store.update_status(job_id, JobStatus.INDEXING)
-                file_path = payload["file_path"]
-                results = [
-                    await self.pipeline._ingest_single_document(
-                        file_path,
+                sources = await collector.collect(
+                    UploadCollectionRequest(
+                        filename=payload.get("filename") or os.path.basename(
+                            payload["file_path"]
+                        ),
+                        file_path=payload["file_path"],
                         namespace=namespace,
                     )
-                ]
-                try:
-                    os.remove(file_path)
-                except OSError as exc:
-                    await logger.warning(
-                        "ingestion_upload_cleanup_failed",
-                        action="ingestion_upload_cleanup_failed",
-                        job_id=job_id,
-                        file_path=file_path,
-                        error=str(exc),
-                        error_type=type(exc).__name__,
-                    )
+                )
+                results = await self.workflow.ingest_sources(sources)
+                job_store.update_status(job_id, JobStatus.INDEXING)
+                self._cleanup_upload(payload.get("file_path"), job_id)
             else:
                 raise ValueError(f"Unsupported source type: {source_type}")
 
@@ -128,12 +134,32 @@ class IngestionService:
             )
             raise
         finally:
-            await self.pipeline.close()
+            await self.workflow.close()
+
+    @staticmethod
+    def _cleanup_upload(file_path: str | None, job_id: str) -> None:
+        """Remove temporary upload files after ingestion."""
+        if not file_path:
+            return
+        try:
+            os.remove(file_path)
+        except OSError as exc:
+            log_async(
+                get_logger(__name__),
+                "warning",
+                "ingestion_upload_cleanup_failed",
+                action="ingestion_upload_cleanup_failed",
+                job_id=job_id,
+                file_path=file_path,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     @staticmethod
     def _result_to_dict(result: IngestionResult) -> Dict[str, Any]:
+        """Convert ingestion result to dict for job payloads."""
         return {
-            "document_id": result.document_id,
+            "document_uid": result.document_uid,
             "title": result.title,
             "chunks_created": result.chunks_created,
             "processing_time_ms": result.processing_time_ms,

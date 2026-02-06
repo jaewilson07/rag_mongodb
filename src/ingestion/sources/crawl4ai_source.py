@@ -1,59 +1,107 @@
-"""Crawl4AI ingestion source implementing the IngestionSource protocol."""
+"""Crawl4AI collector implementing the SourceCollector protocol."""
 
-from typing import Any
+from __future__ import annotations
 
-from .ingestion_source import IngestionSource
-from ..docling.processor import DocumentProcessor, ProcessedDocument
-from ...settings import load_settings
+from typing import List
+
+from mdrag.ingestion.models import (
+    CollectedSource,
+    SourceContent,
+    SourceContentKind,
+    WebCollectionRequest,
+)
+from mdrag.ingestion.protocols import SourceCollector
+from mdrag.integrations.crawl4ai import Crawl4AIClient
+from mdrag.mdrag_logging.service_logging import get_logger
+from mdrag.settings import Settings, load_settings
+
+logger = get_logger(__name__)
 
 
-class Crawl4AIIngestionSource(IngestionSource):
+class Crawl4AICollector(SourceCollector[WebCollectionRequest]):
+    """Collect web content via Crawl4AI."""
+
+    name = "crawl4ai"
+
     def __init__(
         self,
-        url: str,
-        deep: bool = False,
-        max_depth: int | None = None,
-        page_index: int = 0,
-        namespace: dict[str, Any] | None = None,
+        client: Crawl4AIClient | None = None,
+        settings: Settings | None = None,
     ) -> None:
-        self.url = url
-        self.deep = deep
-        self.max_depth = max_depth
-        self.page_index = page_index
-        self.namespace = namespace or {}
-        self.settings = load_settings()
-        self.processor = DocumentProcessor(self.settings)
+        self.settings = settings or load_settings()
+        self.client = client or Crawl4AIClient()
 
-    def fetch_and_convert(self, **kwargs) -> ProcessedDocument:
-        """
-        Fetch a URL via Crawl4AI and return a ProcessedDocument for ingestion.
+    async def collect(self, request: WebCollectionRequest) -> List[CollectedSource]:
+        """Collect web sources and normalize for ingestion."""
+        await logger.info(
+            "collector_crawl4ai_start",
+            action="collector_crawl4ai_start",
+            url=request.url,
+            deep=request.deep,
+            max_depth=request.max_depth,
+        )
 
-        Note: If deep crawling returns multiple pages, select a page via
-        `page_index` (default: first page).
-        """
-        import asyncio
-        import concurrent.futures
-
-        async def _run() -> ProcessedDocument:
-            processed_docs = await self.processor.process_web_url(
-                url=self.url,
-                deep=self.deep,
-                max_depth=self.max_depth,
-                namespace=self.namespace,
+        if request.deep:
+            sources = await self.client.crawl_deep(
+                start_url=request.url,
+                max_depth=request.max_depth or self.settings.crawl4ai_max_depth,
+                word_count_threshold=self.settings.crawl4ai_word_count_threshold,
+                remove_overlay_elements=self.settings.crawl4ai_remove_overlay_elements,
+                remove_base64_images=self.settings.crawl4ai_remove_base64_images,
+                cache_mode=self.settings.crawl4ai_cache_mode,
+                browser_type=self.settings.crawl4ai_browser_type,
+                timeout=self.settings.crawl4ai_timeout,
+                cookies=self.settings.crawl4ai_cookies,
+                user_agent=self.settings.crawl4ai_user_agent,
             )
-            if not processed_docs:
-                raise ValueError(f"No document content returned for url: {self.url}")
-            if self.page_index < 0 or self.page_index >= len(processed_docs):
-                raise IndexError(
-                    "page_index out of range for crawl results: "
-                    f"{self.page_index} (total={len(processed_docs)})"
+        else:
+            source = await self.client.crawl_single_page(
+                url=request.url,
+                word_count_threshold=self.settings.crawl4ai_word_count_threshold,
+                remove_overlay_elements=self.settings.crawl4ai_remove_overlay_elements,
+                remove_base64_images=self.settings.crawl4ai_remove_base64_images,
+                cache_mode=self.settings.crawl4ai_cache_mode,
+                browser_type=self.settings.crawl4ai_browser_type,
+                timeout=self.settings.crawl4ai_timeout,
+                cookies=self.settings.crawl4ai_cookies,
+                user_agent=self.settings.crawl4ai_user_agent,
+            )
+            sources = [source] if source else []
+
+        collected: List[CollectedSource] = []
+        for source in sources:
+            if not source:
+                continue
+            payload = source.html or source.content or ""
+            if not payload.strip():
+                await logger.warning(
+                    "collector_crawl4ai_empty_payload",
+                    action="collector_crawl4ai_empty_payload",
+                    url=source.frontmatter.source_url or request.url,
                 )
-            return processed_docs[self.page_index]
+                continue
+            kind = (
+                SourceContentKind.HTML
+                if source.html and source.html.strip()
+                else SourceContentKind.MARKDOWN
+            )
+            collected.append(
+                CollectedSource(
+                    frontmatter=source.frontmatter,
+                    content=SourceContent(kind=kind, data=payload),
+                    metadata=source.metadata,
+                    links=source.links,
+                    namespace=request.namespace,
+                )
+            )
 
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(_run())
+        await logger.info(
+            "collector_crawl4ai_complete",
+            action="collector_crawl4ai_complete",
+            url=request.url,
+            collected_count=len(collected),
+        )
+        return collected
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(lambda: asyncio.run(_run())).result()
+
+__all__ = ["Crawl4AICollector"]
