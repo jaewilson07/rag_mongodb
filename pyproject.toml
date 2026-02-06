@@ -15,6 +15,7 @@ dependencies = [
     "opentelemetry-api>=1.26.0",
     "opentelemetry-sdk>=1.26.0",
     "pymongo",
+    "motor>=3.6.0",
     "openai>=1.58.0",
     "docling",
     "docling-core>=2.4.0",
@@ -37,6 +38,11 @@ dependencies = [
     "markdownify>=0.12.1",
     "pyyaml>=6.0",
     "objprint>=0.2.3",
+    "neo4j>=5.26.0",
+    "watchdog>=6.0.0",
+    "vllm>=0.6.0",
+    "psutil>=6.1.0",
+    "mcp>=1.0.0",
 ]
 
 [build-system]
