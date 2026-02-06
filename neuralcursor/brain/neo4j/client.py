@@ -277,6 +277,76 @@ class Neo4jClient:
         """
         return await validate_schema(self.driver)
 
+    async def find_node_by_name(
+        self, name: str, node_type: Optional[NodeType] = None
+    ) -> Optional[str]:
+        """
+        Find a node by name.
+        
+        Args:
+            name: Node name to search for
+            node_type: Optional node type filter
+            
+        Returns:
+            UID of found node, or None if not found
+        """
+        async with self.driver.session(database=self.config.database) as session:
+            if node_type:
+                label = node_type.value
+                query = f"MATCH (n:{label} {{name: $name}}) RETURN n.uid as uid LIMIT 1"
+            else:
+                query = "MATCH (n {name: $name}) RETURN n.uid as uid LIMIT 1"
+
+            result = await session.run(query, name=name)
+            record = await result.single()
+
+            if not record:
+                return None
+
+            return record["uid"]
+
+    async def get_related_nodes(
+        self,
+        uid: str,
+        relation_type: RelationType,
+        direction: str = "outgoing",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """
+        Get nodes related to a given node.
+        
+        Args:
+            uid: Starting node UID
+            relation_type: Type of relationship to traverse
+            direction: "outgoing", "incoming", or "both"
+            limit: Maximum number of results
+            
+        Returns:
+            List of related node properties
+        """
+        async with self.driver.session(database=self.config.database) as session:
+            rel_type_name = relation_type.value
+
+            if direction == "outgoing":
+                pattern = f"(start {{uid: $uid}})-[r:{rel_type_name}]->(related)"
+            elif direction == "incoming":
+                pattern = f"(start {{uid: $uid}})<-[r:{rel_type_name}]-(related)"
+            else:  # both
+                pattern = f"(start {{uid: $uid}})-[r:{rel_type_name}]-(related)"
+
+            query = f"""
+            MATCH {pattern}
+            RETURN properties(related) as node,
+                   labels(related) as labels,
+                   properties(r) as relationship
+            LIMIT $limit
+            """
+
+            result = await session.run(query, uid=uid, limit=limit)
+            records = [dict(record) async for record in result]
+
+            return records
+
     async def find_path(
         self, from_uid: str, to_uid: str, max_depth: int = 5, relation_types: Optional[list[RelationType]] = None
     ) -> list[dict[str, Any]]:
