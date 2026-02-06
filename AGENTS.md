@@ -165,7 +165,7 @@ Anti-pattern: missing $lookup for document metadata.
 ### Docling Hybrid Chunking
 When: chunking multi-format documents.
 Example: src/ingestion/chunker.py
-Anti-pattern: passing raw markdown string to HybridChunker.
+Anti-pattern: passing raw markdown string to HierarchicalChunker.
 
 ### External Ingestion Sources
 When: pulling content from Crawl4AI or Google Drive/Docs.
@@ -197,8 +197,8 @@ Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
 # Find hybrid search
 - /bin/grep -R "def hybrid_search" -n src
 
-# Find ingestion pipeline
-- /bin/grep -R "class DocumentIngestionPipeline" -n src/ingestion
+# Find ingestion workflow
+- /bin/grep -R "class IngestionWorkflow" -n src/ingestion
 
 # Find Crawl4AI integration
 - /bin/grep -R "class Crawl4AIClient" -n src
@@ -228,7 +228,7 @@ Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
 
 1. Hybrid search uses manual RRF in src/tools.py (not $rankFusion).
 2. Embeddings must be stored as Python lists, not strings.
-3. HybridChunker needs DoclingDocument; fallback chunking is last resort.
+3. HierarchicalChunker needs DoclingDocument; fallback chunking is last resort.
 4. Examples folder is reference-only and should not be modified.
 5. Ingestion is non-destructive by default; use `--clean` to wipe collections.
 6. Crawl4AI requires the crawl4ai package (and Playwright runtime when crawling).

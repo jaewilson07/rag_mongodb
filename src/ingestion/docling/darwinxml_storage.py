@@ -14,9 +14,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from motor.motor_asyncio import AsyncIOMotorCollection
-from pymongo.errors import DuplicateKeyError
 
 from mdrag.ingestion.docling.darwinxml_models import DarwinXMLDocument
+from mdrag.ingestion.models import GraphTriple
 from mdrag.mdrag_logging.service_logging import get_logger
 
 logger = get_logger(__name__)
@@ -53,6 +53,7 @@ class DarwinXMLStorage:
         darwin_doc: DarwinXMLDocument,
         embedding: Optional[List[float]] = None,
         upsert: bool = True,
+        document_id: Optional[Any] = None,
     ) -> str:
         """
         Store DarwinXML document with chunk data.
@@ -61,12 +62,17 @@ class DarwinXMLStorage:
             darwin_doc: DarwinXML document to store
             embedding: Optional embedding vector
             upsert: If True, update existing document with same content_hash
+            document_id: Optional Mongo document ObjectId for lookup joins
 
         Returns:
             Inserted/updated document ID
         """
         # Build chunk document
-        chunk_doc = self._darwin_to_chunk_document(darwin_doc, embedding)
+        chunk_doc = self._darwin_to_chunk_document(
+            darwin_doc,
+            embedding,
+            document_id,
+        )
 
         # Upsert based on content_hash
         if upsert:
@@ -109,6 +115,7 @@ class DarwinXMLStorage:
         darwin_docs: List[DarwinXMLDocument],
         embeddings: Optional[List[List[float]]] = None,
         upsert: bool = True,
+        document_id: Optional[Any] = None,
     ) -> List[str]:
         """
         Store a batch of DarwinXML documents.
@@ -117,6 +124,7 @@ class DarwinXMLStorage:
             darwin_docs: List of DarwinXML documents
             embeddings: Optional list of embedding vectors (same order as documents)
             upsert: If True, update existing documents
+            document_id: Optional Mongo document ObjectId for lookup joins
 
         Returns:
             List of inserted/updated document IDs
@@ -131,6 +139,7 @@ class DarwinXMLStorage:
                     darwin_doc=darwin_doc,
                     embedding=embedding,
                     upsert=upsert,
+                    document_id=document_id,
                 )
                 doc_ids.append(doc_id)
             except Exception as e:
@@ -154,7 +163,7 @@ class DarwinXMLStorage:
 
     async def get_graph_triples(
         self, darwin_doc: DarwinXMLDocument
-    ) -> List[Dict[str, Any]]:
+    ) -> List[GraphTriple]:
         """
         Extract graph triples for Neo4j ingestion.
 
@@ -172,35 +181,7 @@ class DarwinXMLStorage:
         Returns:
             List of graph triples
         """
-        triples = darwin_doc.extract_graph_triples()
-
-        # Add provenance node
-        triples.append(
-            {
-                "subject": darwin_doc.chunk_uuid,
-                "predicate": "HAS_PROVENANCE",
-                "object": f"provenance:{darwin_doc.provenance.content_hash}",
-                "properties": {
-                    "source_url": darwin_doc.provenance.source_url,
-                    "source_type": darwin_doc.provenance.source_type,
-                    "ingestion_timestamp": darwin_doc.provenance.ingestion_timestamp,
-                    "validation_status": darwin_doc.provenance.validation_status.value,
-                },
-            }
-        )
-
-        # Add tag relationships
-        for tag in darwin_doc.provenance.tags:
-            triples.append(
-                {
-                    "subject": darwin_doc.chunk_uuid,
-                    "predicate": "HAS_TAG",
-                    "object": f"tag:{tag}",
-                    "properties": {},
-                }
-            )
-
-        return triples
+        return darwin_doc.extract_graph_triples()
 
     async def query_by_tags(
         self,
@@ -381,6 +362,7 @@ class DarwinXMLStorage:
         self,
         darwin_doc: DarwinXMLDocument,
         embedding: Optional[List[float]] = None,
+        document_id: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Convert DarwinXML document to MongoDB chunk document.
@@ -398,12 +380,23 @@ class DarwinXMLStorage:
             "created_at": datetime.now().isoformat(),
         }
 
+        if document_id is not None:
+            chunk_doc["document_id"] = document_id
+
         # Add searchable fields from DarwinXML
         chunk_doc["tags"] = darwin_doc.provenance.tags
         chunk_doc["source_url"] = darwin_doc.provenance.source_url
         chunk_doc["source_type"] = darwin_doc.provenance.source_type
+        chunk_doc["source_mask"] = self._source_type_to_mask(
+            darwin_doc.provenance.source_type
+        )
         chunk_doc["validation_status"] = darwin_doc.provenance.validation_status.value
         chunk_doc["content_hash"] = darwin_doc.provenance.content_hash
+        chunk_doc["document_uid"] = darwin_doc.provenance.document_uid
+        chunk_doc["source_id"] = darwin_doc.provenance.source_id
+        chunk_doc["source_group"] = darwin_doc.provenance.source_group
+        chunk_doc["user_id"] = darwin_doc.provenance.user_id
+        chunk_doc["org_id"] = darwin_doc.provenance.org_id
 
         # Extract attributes for easy querying
         all_attributes = []
@@ -425,6 +418,11 @@ class DarwinXMLStorage:
             chunk_doc["page_number"] = main_ann.metadata.get("page_number")
 
         return chunk_doc
+
+    @staticmethod
+    def _source_type_to_mask(source_type: str) -> int:
+        mapping = {"web": 1, "gdrive": 2, "upload": 4}
+        return mapping.get(source_type, 0)
 
 
 __all__ = ["DarwinXMLStorage"]

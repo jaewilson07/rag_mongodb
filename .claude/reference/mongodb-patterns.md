@@ -407,12 +407,14 @@ result = await db.chunks.insert_many(chunk_dicts, ordered=False)
 from bson import ObjectId
 from datetime import datetime
 
+from mdrag.ingestion.docling.chunker import DoclingChunks
+
 async def save_document_with_chunks(
     db,
     title: str,
     source: str,
     content: str,
-    chunks: list[DocumentChunk],
+    chunks: list[DoclingChunks],
     metadata: dict
 ):
     """Save document and its chunks to MongoDB."""

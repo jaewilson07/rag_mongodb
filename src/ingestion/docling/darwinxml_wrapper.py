@@ -69,7 +69,7 @@ class DarwinXMLWrapper:
     def wrap_chunk(
         self,
         chunk: DoclingChunks,
-        document_id: Optional[str] = None,
+        document_uid: Optional[str] = None,
         parent_chunk_id: Optional[str] = None,
         validation_status: ValidationStatus = ValidationStatus.UNVALIDATED,
         additional_tags: Optional[List[str]] = None,
@@ -79,7 +79,7 @@ class DarwinXMLWrapper:
 
         Args:
             chunk: DoclingChunk to wrap
-            document_id: Optional document identifier
+            document_uid: Optional document identifier
             parent_chunk_id: Optional parent chunk ID for hierarchy
             validation_status: Validation status for this chunk
             additional_tags: Additional tags to apply
@@ -114,7 +114,7 @@ class DarwinXMLWrapper:
             annotations=annotations,
             provenance=provenance,
             metadata={
-                "document_id": document_id,
+                "document_uid": document_uid,
                 "parent_chunk_id": parent_chunk_id,
                 "token_count": chunk.token_count,
                 "start_char": chunk.start_char,
@@ -130,7 +130,7 @@ class DarwinXMLWrapper:
     def wrap_chunks_batch(
         self,
         chunks: List[DoclingChunks],
-        document_id: Optional[str] = None,
+        document_uid: Optional[str] = None,
         validation_status: ValidationStatus = ValidationStatus.UNVALIDATED,
         additional_tags: Optional[List[str]] = None,
     ) -> List[DarwinXMLDocument]:
@@ -142,7 +142,7 @@ class DarwinXMLWrapper:
 
         Args:
             chunks: List of DoclingChunks to wrap
-            document_id: Optional document identifier
+            document_uid: Optional document identifier
             validation_status: Validation status for all chunks
             additional_tags: Additional tags to apply to all chunks
 
@@ -160,7 +160,7 @@ class DarwinXMLWrapper:
 
             darwin_doc = self.wrap_chunk(
                 chunk=chunk,
-                document_id=document_id,
+                document_uid=document_uid,
                 parent_chunk_id=parent_id,
                 validation_status=validation_status,
                 additional_tags=additional_tags,
@@ -217,8 +217,13 @@ class DarwinXMLWrapper:
 
         return ProvenanceMetadata(
             ingestion_timestamp=chunk.passport.ingestion_timestamp,
+            document_uid=chunk.passport.document_uid,
             source_url=chunk.passport.source_url,
             source_type=chunk.passport.source_type,
+            source_id=chunk.passport.source_id,
+            source_group=chunk.passport.source_group,
+            user_id=chunk.passport.user_id,
+            org_id=chunk.passport.org_id,
             validation_status=validation_status,
             processor_version=self.processor_version,
             chunker_version="hierarchical-v1",

@@ -14,10 +14,9 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from docling.chunking import HierarchicalChunker
-from docling_core.types.doc.document import DoclingDocument
 from transformers import AutoTokenizer
 
-from mdrag.ingestion.models import MetadataPassport
+from mdrag.ingestion.models import IngestionDocument, MetadataPassport
 from mdrag.integrations.models import Source, SourceFrontmatter
 from mdrag.mdrag_logging.service_logging import get_logger, log_async
 
@@ -29,7 +28,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class ChunkingConfig:
-    """Configuration for DoclingHybridChunker."""
+    """Configuration for DoclingHierarchicalChunker."""
 
     chunk_size: int = 1000  # Target characters per chunk (used in fallback)
     chunk_overlap: int = 200  # Character overlap between chunks (used in fallback)
@@ -66,7 +65,7 @@ class DoclingHierarchicalChunker:
     """
     Docling HierarchicalChunker wrapper for structure-aware document splitting.
 
-    This chunker uses Docling's built-in HybridChunker which:
+    This chunker uses Docling's built-in HierarchicalChunker which:
     - Respects document structure (sections, paragraphs, tables)
     - Is token-aware (fits embedding model limits)
     - Preserves semantic coherence
@@ -108,48 +107,42 @@ class DoclingHierarchicalChunker:
             max_tokens=config.max_tokens,
         )
 
-    async def chunk_document(
-        self,
-        content: str,
-        title: str,
-        source: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        docling_doc: Optional[DoclingDocument] = None,
-    ) -> List[DoclingChunks]:
-        """
-        Chunk a document using Docling's HierarchicalChunker.
+    async def chunk_document(self, document: IngestionDocument) -> List[DoclingChunks]:
+        """Chunk a processed document using Docling's HierarchicalChunker.
 
         Args:
-            content: Document content (markdown format)
-            title: Document title
-            source: Document source
-            metadata: Additional metadata
-            docling_doc: Optional pre-converted DoclingDocument (for efficiency)
+            document: Docling-processed ingestion document.
 
         Returns:
-            List of document chunks with contextualized content
+            List of document chunks with contextualized content.
         """
-        if not content.strip():
+        if not document.content.strip():
             return []
 
+        metadata = document.metadata
         base_metadata = {
-            "title": title,
-            "source": source,
+            **metadata.source_metadata,
+            "document_uid": metadata.identity.document_uid,
+            "content_hash": metadata.identity.content_hash,
+            "source_type": metadata.identity.source_type,
+            "source_url": metadata.identity.source_url,
+            "source_id": metadata.identity.source_id,
+            "source_group": metadata.namespace.source_group,
+            "user_id": metadata.namespace.user_id,
+            "org_id": metadata.namespace.org_id,
+            "document_title": document.title,
+            "ingestion_timestamp": metadata.ingested_at,
             "chunk_method": "hierarchical",
-            **(metadata or {}),
         }
 
-        # If we don't have a DoclingDocument, we need to create one from markdown
+        docling_doc = document.docling_document
         if docling_doc is None:
-            # For markdown content, we need to convert it to DoclingDocument
-            # This is a simplified version - in practice, content comes from
-            # Docling's document converter in the ingestion pipeline
             await logger.warning(
                 "docling_chunker_fallback",
                 action="docling_chunker_fallback",
                 reason="no_docling_document",
             )
-            return self._simple_fallback_chunk(content, base_metadata)
+            return self._simple_fallback_chunk(document.content, base_metadata)
 
         try:
             # Use HierarchicalChunker to chunk the DoclingDocument
@@ -168,7 +161,7 @@ class DoclingHierarchicalChunker:
                 page_number = self._extract_page_number(chunk)
                 is_table = self._extract_is_table(chunk, contextualized_text)
                 summary_context = self._build_summary_context(
-                    title=title,
+                    title=document.title,
                     heading_path=heading_path,
                 )
                 embedding_text = None
@@ -179,23 +172,27 @@ class DoclingHierarchicalChunker:
                 token_count = len(self.tokenizer.encode(contextualized_text))
 
                 passport = MetadataPassport(
+                    document_uid=base_metadata.get("document_uid", ""),
                     source_type=base_metadata.get("source_type", "upload"),
-                    source_url=base_metadata.get("source", source),
-                    document_title=base_metadata.get("document_title", title),
+                    source_url=base_metadata.get("source_url", ""),
+                    source_id=base_metadata.get("source_id"),
+                    source_group=base_metadata.get("source_group"),
+                    user_id=base_metadata.get("user_id"),
+                    org_id=base_metadata.get("org_id"),
+                    document_title=base_metadata.get("document_title", document.title),
                     page_number=page_number or base_metadata.get("page_number"),
-                    heading_path=heading_path
-                    or base_metadata.get("heading_path", []),
+                    heading_path=heading_path or base_metadata.get("heading_path", []),
                     ingestion_timestamp=base_metadata.get(
                         "ingestion_timestamp", datetime.now().isoformat()
                     ),
                     content_hash=base_metadata.get("content_hash", ""),
                 )
-                frontmatter = SourceFrontmatter(
-                    source_type=passport.source_type,
-                    source_url=passport.source_url,
-                    source_title=passport.document_title,
-                    metadata={"heading_path": heading_path, "page_number": page_number},
-                )
+                frontmatter = metadata.frontmatter.model_copy(deep=True)
+                frontmatter.metadata = {
+                    **frontmatter.metadata,
+                    "heading_path": heading_path,
+                    "page_number": page_number,
+                }
 
                 # Create chunk metadata
                 chunk_metadata = {
@@ -245,7 +242,7 @@ class DoclingHierarchicalChunker:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            return self._simple_fallback_chunk(content, base_metadata)
+            return self._simple_fallback_chunk(document.content, base_metadata)
 
     @staticmethod
     def _build_summary_context(title: str, heading_path: list[str]) -> str:
@@ -402,11 +399,11 @@ class DoclingHierarchicalChunker:
         base_metadata: Dict[str, Any],
     ) -> List[DoclingChunks]:
         """
-        Simple fallback chunking when HybridChunker can't be used.
+        Simple fallback chunking when HierarchicalChunker can't be used.
 
         This is used when:
         - No DoclingDocument is provided
-        - HybridChunker fails
+        - HierarchicalChunker fails
 
         Args:
             content: Content to chunk
@@ -446,7 +443,7 @@ class DoclingHierarchicalChunker:
             if chunk_text.strip():
                 token_count = len(self.tokenizer.encode(chunk_text))
                 summary_context = self._build_summary_context(
-                    title=base_metadata.get("title", ""),
+                    title=base_metadata.get("document_title", ""),
                     heading_path=[],
                 )
                 is_table = self._extract_is_table({}, chunk_text)
@@ -455,8 +452,13 @@ class DoclingHierarchicalChunker:
                 )
 
                 passport = MetadataPassport(
+                    document_uid=base_metadata.get("document_uid", ""),
                     source_type=base_metadata.get("source_type", "upload"),
-                    source_url=base_metadata.get("source", ""),
+                    source_url=base_metadata.get("source_url", ""),
+                    source_id=base_metadata.get("source_id"),
+                    source_group=base_metadata.get("source_group"),
+                    user_id=base_metadata.get("user_id"),
+                    org_id=base_metadata.get("org_id"),
                     document_title=base_metadata.get("document_title", ""),
                     page_number=base_metadata.get("page_number"),
                     heading_path=base_metadata.get("heading_path", []),
@@ -469,7 +471,10 @@ class DoclingHierarchicalChunker:
                     source_type=passport.source_type,
                     source_url=passport.source_url,
                     source_title=passport.document_title,
-                    metadata={"heading_path": passport.heading_path},
+                    metadata={
+                        "heading_path": passport.heading_path,
+                        "page_number": passport.page_number,
+                    },
                 )
 
                 chunks.append(

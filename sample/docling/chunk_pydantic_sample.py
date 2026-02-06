@@ -3,14 +3,13 @@
 
 from __future__ import annotations
 
-import hashlib
-import tempfile
+import asyncio
 from pathlib import Path
 
-from docling.document_converter import DocumentConverter
-
 from mdrag.ingestion.docling.chunker import ChunkingConfig, create_chunker  # type: ignore[reportMissingImports]
-from mdrag.ingestion.docling.processor import DocumentProcessor  # type: ignore[reportMissingImports]
+from mdrag.ingestion.docling.processor import DoclingProcessor  # type: ignore[reportMissingImports]
+from mdrag.ingestion.models import IngestionDocument, UploadCollectionRequest  # type: ignore[reportMissingImports]
+from mdrag.ingestion.sources.upload_source import UploadCollector  # type: ignore[reportMissingImports]
 from mdrag.settings import load_settings  # type: ignore[reportMissingImports]
 
 
@@ -60,30 +59,32 @@ def subset_markdown_by_headings(
     return "\n\n".join(output_lines).strip()
 
 
-def convert_subset_to_docling(markdown: str) -> tuple[str, object]:
-    """Convert subset markdown into a DoclingDocument using a temp file."""
-    with tempfile.NamedTemporaryFile(suffix=".md", delete=True) as tmp:
-        tmp.write(markdown.encode("utf-8"))
-        tmp.flush()
-        doc = DocumentConverter().convert(tmp.name).document
-        return markdown, doc
-
-
-def main() -> None:
-    settings = load_settings()
-    processor = DocumentProcessor(settings=settings)
-
-    file_path = Path("sample/docling/pydantic.txt").resolve()
-    processed = processor.process_local_file(str(file_path))
-
+async def build_subset_document(file_path: Path) -> IngestionDocument:
+    """Create an ingestion document from a subset of the markdown content."""
+    markdown = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
     subset_markdown = subset_markdown_by_headings(
-        processed.content,
+        markdown,
         max_chars=20000,
         max_sections=8,
     )
 
-    subset_markdown, subset_doc = convert_subset_to_docling(subset_markdown)
-    content_hash = hashlib.sha256(subset_markdown.encode("utf-8")).hexdigest()
+    collector = UploadCollector()
+    request = UploadCollectionRequest(
+        filename=file_path.name,
+        content=subset_markdown,
+        mime_type="text/markdown",
+    )
+    sources = await collector.collect(request)
+    if not sources:
+        raise ValueError("Upload collector returned no sources")
+
+    processor = DoclingProcessor(settings=load_settings())
+    return await processor.convert_source(sources[0])
+
+
+async def main() -> None:
+    file_path = Path("sample/docling/pydantic.txt").resolve()
+    document = await build_subset_document(file_path)
 
     chunker = create_chunker(
         ChunkingConfig(
@@ -94,22 +95,9 @@ def main() -> None:
         )
     )
 
-    chunks = chunker.chunk_document(
-        content=subset_markdown,
-        title=processed.title,
-        source=processed.source_url,
-        metadata={
-            **processed.metadata,
-            "content_hash": content_hash,
-        },
-        docling_doc=subset_doc,
-    )
-
-    # chunk_document is async; run it synchronously for this sample
-    import asyncio
-
-    results = asyncio.run(chunks)
-    print(f"Subset chars: {len(subset_markdown)}")
+    results = await chunker.chunk_document(document)
+    print(f"Subset chars: {len(document.content)}")
+    print(f"Document UID: {document.metadata.identity.document_uid}")
     print(f"Chunks created: {len(results)}")
     if results:
         first = results[0]
@@ -118,4 +106,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

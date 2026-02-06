@@ -234,21 +234,21 @@ def test_extract_graph_triples():
     
     # Check document -> chunk relationship
     doc_chunk_triple = next(
-        (t for t in triples if t["predicate"] == "HAS_CHUNK"), None
+        (t for t in triples if t.predicate == "HAS_CHUNK"), None
     )
     assert doc_chunk_triple is not None
-    assert doc_chunk_triple["subject"] == "Test Document"
-    assert doc_chunk_triple["object"] == "test-uuid"
+    assert doc_chunk_triple.subject == "Test Document"
+    assert doc_chunk_triple.object == "test-uuid"
 
     # Check entity mention
     entity_triple = next(
-        (t for t in triples if t["predicate"] == "MENTIONS"), None
+        (t for t in triples if t.predicate == "MENTIONS"), None
     )
     assert entity_triple is not None
-    assert entity_triple["object"] == "Italy"
+    assert entity_triple.object == "Italy"
 
     # Check tag relationships
-    tag_triples = [t for t in triples if t["predicate"] == "HAS_TAG"]
+    tag_triples = [t for t in triples if t.predicate == "HAS_TAG"]
     assert len(tag_triples) == 2  # para:project and test
 
 

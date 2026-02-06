@@ -10,37 +10,36 @@ This document describes how document ingestion works in the MongoDB RAG Agent an
 - Keep ingestion resilient (log and continue on conversion errors).
 
 ## High-Level Flow
-1. **Ingest source**: A document (file, URL, or integration export) is loaded with source metadata.
-2. **Convert**: Docling converts the document into a structured representation.
+1. **Collect**: A collector returns `CollectedSource` with `SourceFrontmatter`.
+2. **Convert**: Docling converts the source into an `IngestionDocument`.
 3. **Chunk**: The document is split into `DoclingChunks` (structure-aware chunks).
 4. **Embed**: Embeddings are generated for each chunk.
-5. **Persist**: Chunks and documents are stored in MongoDB using the two-collection pattern.
+5. **Persist**: Storage adapters write documents and chunks to MongoDB.
 
 ## Key Models
 ### DoclingChunks (Chunk Model)
 - `DoclingChunks` is the canonical chunk model.
 - It **inherits from `Source`** and includes the full `MetadataPassport` and `frontmatter`.
-- This ensures every chunk carries identifying metadata and provenance.
+- Each chunk carries a `document_uid` to link MongoDB, Neo4j, and Obsidian outputs.
 
 ### Source and Metadata
-- `Source` captures origin information (e.g., URL or file identity).
-- `MetadataPassport` captures structured metadata derived from the document.
-- `frontmatter` captures export metadata for integrations.
+- `CollectedSource` is the standardized collector output.
+- `DocumentIdentity` + `Namespace` provide cross-store linkage (`document_uid`).
+- `MetadataPassport` is attached to every chunk for citation and tracing.
 
 ## Deduplication Strategy
 ### Current Behavior
-- Deduplication uses **upsert on `content_hash`**, derived from the chunk body.
-- This prevents *exact* duplicate chunks from being inserted.
-- Minor text changes will produce new hashes, which is acceptable for versioned content.
+- Deduplication uses **upsert on `document_uid`**, derived from source identity + content hash.
+- This prevents duplicate documents while keeping versioned content distinct.
 
 ### Optional Source-Identity Deduplication
 For stricter identity-based deduplication, a source-level key (such as URL or a stable document ID) can be used as an alternate or additional key. This can reduce duplicates across re-ingestion when content changes slightly.
 
 ## Document Identification
 To reliably identify documents and chunks:
-- Use **source identity** (URL, file path, or integration document ID) when available.
-- Preserve **`Source` fields** across conversion, chunking, and persistence.
-- Ensure **`MetadataPassport`** is attached to every chunk for downstream filtering and auditing.
+- Use **document_uid** as the canonical cross-store identifier.
+- Preserve **source identity** (URL, file path, or integration document ID).
+- Ensure **MetadataPassport** is attached to every chunk for downstream filtering and auditing.
 
 ## Intelligent Chunking
 For large documents, a structure-aware subset step is used before chunking. This reduces noise and improves chunk quality by prioritizing headings and relevant sections.
@@ -54,9 +53,11 @@ See: `sample/docling/chunk_pydantic_sample.py` for a working example of heading-
 - **Structure-aware subsetting** improves relevance for large documents.
 
 ## Touch Points
+- Collection: `src/ingestion/sources/`
+- Processing: `src/ingestion/docling/processor.py`
 - Chunking: `src/ingestion/docling/chunker.py`
 - Embeddings: `src/ingestion/embedder.py`
-- Ingestion pipeline: `src/ingestion/ingest.py`
+- Storage: `src/ingestion/storage.py`
 
 ## Docker Configuration (Project Convention)
 - Host ports for local Docker services should live in the 7000–7500 range to avoid conflicts.
