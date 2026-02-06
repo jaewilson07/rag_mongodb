@@ -37,6 +37,10 @@ dependencies = [
     "markdownify>=0.12.1",
     "pyyaml>=6.0",
     "objprint>=0.2.3",
+    "neo4j>=5.27.0",
+    "vllm>=0.7.0",
+    "watchdog>=6.0.0",
+    "nvidia-ml-py>=12.560.0",
 ]
 
 [build-system]

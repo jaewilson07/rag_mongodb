@@ -177,6 +177,46 @@ class Settings(BaseSettings):
         description="Redis URL for ingestion job queue and status tracking",
     )
 
+    # Neo4j Configuration (NeuralCursor Second Brain)
+    neo4j_uri: str = Field(
+        default="bolt://localhost:7687",
+        description="Neo4j connection URI for knowledge graph",
+    )
+    neo4j_username: str = Field(
+        default="neo4j",
+        description="Neo4j database username",
+    )
+    neo4j_password: str = Field(
+        default="password",
+        description="Neo4j database password",
+    )
+    neo4j_database: str = Field(
+        default="neuralcursor",
+        description="Neo4j database name for Second Brain",
+    )
+
+    # Local LLM Configuration (vLLM)
+    vllm_enabled: bool = Field(
+        default=False,
+        description="Enable local vLLM serving on dual GPUs",
+    )
+    vllm_reasoning_url: str = Field(
+        default="http://localhost:8000",
+        description="vLLM reasoning LLM endpoint (GPU 0)",
+    )
+    vllm_embedding_url: str = Field(
+        default="http://localhost:8001",
+        description="vLLM embedding/RAG endpoint (GPU 1)",
+    )
+    vllm_reasoning_model: str = Field(
+        default="deepseek-ai/deepseek-coder-33b-instruct",
+        description="Reasoning model for graph extraction",
+    )
+    vllm_embedding_model: str = Field(
+        default="BAAI/bge-m3",
+        description="Embedding model for local RAG",
+    )
+
 
 def load_settings() -> Settings:
     """Load settings with proper error handling."""
