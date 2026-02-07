@@ -132,10 +132,22 @@ export default function Home() {
                   Generate wikis from your ingested knowledge base
                 </p>
                 <Link
+                  href="/save"
+                  className="text-xs font-medium text-[var(--accent-primary)] hover:text-[var(--highlight)] hover:underline whitespace-nowrap"
+                >
+                  Save Link
+                </Link>
+                <Link
+                  href="/readings"
+                  className="text-xs font-medium text-[var(--accent-primary)] hover:text-[var(--highlight)] hover:underline whitespace-nowrap"
+                >
+                  Readings
+                </Link>
+                <Link
                   href="/crawler"
                   className="text-xs font-medium text-[var(--accent-primary)] hover:text-[var(--highlight)] hover:underline whitespace-nowrap"
                 >
-                  Web Crawler
+                  Crawler
                 </Link>
                 {projects.length > 0 && (
                   <Link

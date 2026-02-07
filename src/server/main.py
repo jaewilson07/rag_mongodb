@@ -11,6 +11,7 @@ from mdrag.server.api.ingest.router import ingest_router, jobs_router
 from mdrag.server.api.feedback.router import feedback_router
 from mdrag.server.api.query.router import query_router
 from mdrag.server.api.wiki.router import wiki_router
+from mdrag.server.api.readings.router import readings_router
 
 
 @asynccontextmanager
@@ -39,3 +40,4 @@ app.include_router(health_router)
 app.include_router(query_router)
 app.include_router(feedback_router)
 app.include_router(wiki_router)
+app.include_router(readings_router)
