@@ -69,6 +69,8 @@ services:
 
       # SearXNG Configuration
       SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
+    ports:
+      - "8000:8000"
     volumes:
       # Mount source code for development
       - ./src:/app/src
@@ -83,6 +85,21 @@ services:
     stdin_open: true
     tty: true
     command: ["sh", "-c", "python server/maintenance/init_indexes.py && python -m src.cli"]
+    restart: unless-stopped
+
+  wiki-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_URL: http://rag-agent:8000
+      NEXT_PUBLIC_API_BASE: ""
+    ports:
+      - "3000:3000"
+    depends_on:
+      - rag-agent
+    networks:
+      - rag_network
     restart: unless-stopped
 
 networks:

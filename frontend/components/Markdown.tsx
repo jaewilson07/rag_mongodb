@@ -133,9 +133,11 @@ const Markdown: React.FC<MarkdownProps> = ({ content }) => {
         </td>
       );
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    code(props: any) {
-      const { inline, className, children, ...otherProps } = props;
+    code({ inline, className, children, ...otherProps }: {
+      inline?: boolean;
+      className?: string;
+      children?: React.ReactNode;
+    } & React.HTMLAttributes<HTMLElement>) {
       const match = /language-(\w+)/.exec(className || "");
       const codeContent = children ? String(children).replace(/\n$/, "") : "";
 
@@ -164,11 +166,10 @@ const Markdown: React.FC<MarkdownProps> = ({ content }) => {
             </div>
             <SyntaxHighlighter
               language={match[1]}
-              style={tomorrow}
+              style={tomorrow as Record<string, React.CSSProperties>}
               customStyle={{ margin: 0, borderRadius: "0 0 0.375rem 0.375rem", padding: "1rem" }}
               showLineNumbers={true}
               wrapLongLines={true}
-              {...otherProps}
             >
               {codeContent}
             </SyntaxHighlighter>
