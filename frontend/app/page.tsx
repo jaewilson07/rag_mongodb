@@ -131,6 +131,12 @@ export default function Home() {
                 <p className="text-xs text-[var(--muted)] whitespace-nowrap">
                   Generate wikis from your ingested knowledge base
                 </p>
+                <Link
+                  href="/crawler"
+                  className="text-xs font-medium text-[var(--accent-primary)] hover:text-[var(--highlight)] hover:underline whitespace-nowrap"
+                >
+                  Web Crawler
+                </Link>
                 {projects.length > 0 && (
                   <Link
                     href="/wiki/projects"
@@ -382,6 +388,12 @@ export default function Home() {
             Knowledge Wiki - Powered by MongoDB RAG Agent
           </p>
           <div className="flex items-center gap-4">
+            <Link
+              href="/crawler"
+              className="text-sm text-[var(--muted)] hover:text-[var(--accent-primary)] transition-colors"
+            >
+              Web Crawler
+            </Link>
             <Link
               href="/wiki/projects"
               className="text-sm text-[var(--muted)] hover:text-[var(--accent-primary)] transition-colors"
