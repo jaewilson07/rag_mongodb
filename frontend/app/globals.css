@@ -90,14 +90,27 @@ body {
 .wiki-prose ul { @apply list-disc pl-6 mb-4 text-sm space-y-2; }
 .wiki-prose ol { @apply list-decimal pl-6 mb-4 text-sm space-y-2; }
 .wiki-prose li { @apply mb-1 text-sm leading-relaxed; }
-.wiki-prose blockquote { @apply border-l-4 border-[var(--accent-primary)]/30 bg-[var(--background)]/30 pl-4 py-1 italic my-4 text-sm; }
+.wiki-prose blockquote {
+  @apply border-l-4 pl-4 py-1 italic my-4 text-sm;
+  border-color: var(--accent-primary);
+  background: rgba(155, 124, 185, 0.05);
+}
 .wiki-prose table { @apply min-w-full text-sm border-collapse my-6; }
-.wiki-prose thead { @apply bg-[var(--background)]/70; }
-.wiki-prose th { @apply px-4 py-3 text-left font-medium border border-[var(--border-color)]; }
-.wiki-prose td { @apply px-4 py-3 border border-[var(--border-color)]; }
-.wiki-prose a { @apply text-[var(--accent-primary)] hover:text-[var(--highlight)] transition-colors; }
-.wiki-prose code { @apply bg-[var(--background)]/70 px-1.5 py-0.5 rounded font-mono text-xs border border-[var(--border-color)]; }
-.wiki-prose pre { @apply bg-[var(--background)]/80 rounded-md p-4 overflow-x-auto border border-[var(--border-color)] shadow-sm my-4; }
+.wiki-prose thead { background: var(--background); }
+.wiki-prose th { @apply px-4 py-3 text-left font-medium; border: 1px solid var(--border-color); }
+.wiki-prose td { @apply px-4 py-3; border: 1px solid var(--border-color); }
+.wiki-prose a { color: var(--accent-primary); @apply transition-colors; }
+.wiki-prose a:hover { color: var(--highlight); }
+.wiki-prose code {
+  @apply px-1.5 py-0.5 rounded font-mono text-xs;
+  background: var(--background);
+  border: 1px solid var(--border-color);
+}
+.wiki-prose pre {
+  @apply rounded-md p-4 overflow-x-auto shadow-sm my-4;
+  background: var(--background);
+  border: 1px solid var(--border-color);
+}
 .wiki-prose pre code { @apply bg-transparent border-none p-0; }
 
 /* Scrollbar styling */
