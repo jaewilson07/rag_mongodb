@@ -13,6 +13,7 @@ class APIConfig:
     HEALTH_PREFIX: str = "/api/v1/health"
     QUERY_PREFIX: str = "/api/v1/query"
     FEEDBACK_PREFIX: str = "/api/v1/feedback"
+    WIKI_PREFIX: str = "/api/v1/wiki"
 
 
 api_config = APIConfig()
