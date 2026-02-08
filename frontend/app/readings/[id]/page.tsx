@@ -11,6 +11,19 @@ interface RelatedLink {
   snippet: string;
 }
 
+interface YouTubeMeta {
+  video_id: string;
+  channel: string;
+  thumbnail_url: string;
+  duration_seconds: number;
+  duration_display: string;
+  view_count: number;
+  upload_date: string;
+  chapters: { title: string; start_time: number; end_time: number }[];
+  transcript_language: string;
+  has_transcript: boolean;
+}
+
 interface Reading {
   id: string;
   url: string;
@@ -23,6 +36,8 @@ interface Reading {
   saved_at: string;
   word_count: number;
   status: string;
+  media_type?: string;
+  youtube?: YouTubeMeta;
 }
 
 export default function ReadingDetailPage() {
@@ -115,6 +130,61 @@ export default function ReadingDetailPage() {
             </div>
           )}
         </div>
+
+        {/* YouTube embed */}
+        {reading.media_type === "youtube" && reading.youtube?.video_id && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="aspect-video bg-black">
+              <iframe
+                src={`https://www.youtube.com/embed/${reading.youtube.video_id}`}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title={reading.title}
+              />
+            </div>
+            <div className="px-5 py-3 flex items-center gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
+                </svg>
+                <span className="font-medium">{reading.youtube.channel}</span>
+              </span>
+              {reading.youtube.duration_display && <span>{reading.youtube.duration_display}</span>}
+              {reading.youtube.view_count > 0 && <span>{reading.youtube.view_count.toLocaleString()} views</span>}
+              {reading.youtube.has_transcript && (
+                <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 text-[10px] font-medium">
+                  Transcript available
+                </span>
+              )}
+            </div>
+            {reading.youtube.chapters.length > 0 && (
+              <div className="border-t border-gray-100 px-5 py-3">
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Chapters</h4>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {reading.youtube.chapters.map((ch, i) => {
+                    const m = Math.floor(ch.start_time / 60);
+                    const s = Math.floor(ch.start_time % 60);
+                    return (
+                      <a
+                        key={i}
+                        href={`https://www.youtube.com/watch?v=${reading.youtube!.video_id}&t=${Math.floor(ch.start_time)}s`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs hover:text-indigo-600 transition-colors"
+                      >
+                        <span className="font-mono text-indigo-500 w-10 text-right flex-shrink-0">
+                          {m}:{s.toString().padStart(2, "0")}
+                        </span>
+                        <span className="text-gray-700">{ch.title}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Summary */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

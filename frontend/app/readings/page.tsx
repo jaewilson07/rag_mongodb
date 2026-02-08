@@ -13,6 +13,14 @@ interface ReadingItem {
   saved_at: string;
   status: string;
   domain?: string;
+  media_type?: string;
+  youtube?: {
+    video_id: string;
+    channel: string;
+    thumbnail_url: string;
+    duration_display: string;
+    has_transcript: boolean;
+  };
 }
 
 export default function ReadingsPage() {
@@ -114,12 +122,27 @@ export default function ReadingsPage() {
                 className="block bg-white rounded-xl border border-gray-200 p-4 hover:border-indigo-200 hover:shadow-sm transition-all group"
               >
                 <div className="flex items-start gap-3">
-                  {/* Favicon placeholder */}
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-indigo-50 transition-colors">
-                    <span className="text-xs font-bold text-gray-400 group-hover:text-indigo-500 uppercase">
-                      {getDomain(reading).charAt(0)}
-                    </span>
-                  </div>
+                  {/* Thumbnail or favicon */}
+                  {reading.media_type === "youtube" && reading.youtube?.thumbnail_url ? (
+                    <div className="w-24 h-14 rounded-lg overflow-hidden bg-black flex-shrink-0 relative">
+                      <img
+                        src={reading.youtube.thumbnail_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                      {reading.youtube.duration_display && (
+                        <span className="absolute bottom-0.5 right-0.5 px-1 py-0.5 rounded bg-black/80 text-white text-[9px] font-mono leading-none">
+                          {reading.youtube.duration_display}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-indigo-50 transition-colors">
+                      <span className="text-xs font-bold text-gray-400 group-hover:text-indigo-500 uppercase">
+                        {getDomain(reading).charAt(0)}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-semibold text-gray-800 group-hover:text-indigo-700 line-clamp-1 mb-0.5">
@@ -128,8 +151,17 @@ export default function ReadingsPage() {
                     <p className="text-xs text-gray-500 line-clamp-2 mb-2">
                       {reading.summary}
                     </p>
-                    <div className="flex items-center gap-3 text-[11px] text-gray-400">
-                      <span>{getDomain(reading)}</span>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-400 flex-wrap">
+                      {reading.media_type === "youtube" ? (
+                        <span className="flex items-center gap-1">
+                          <svg className="w-3 h-3 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
+                          </svg>
+                          {reading.youtube?.channel || "YouTube"}
+                        </span>
+                      ) : (
+                        <span>{getDomain(reading)}</span>
+                      )}
                       <span>{formatDate(reading.saved_at)}</span>
                       {reading.tags?.length > 0 && (
                         <div className="flex gap-1">

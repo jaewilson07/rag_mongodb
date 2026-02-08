@@ -26,6 +26,21 @@ class RelatedLink(BaseModel):
     source: Optional[str] = None
 
 
+class YouTubeMetadata(BaseModel):
+    """YouTube-specific metadata for video readings."""
+
+    video_id: str = ""
+    channel: str = ""
+    thumbnail_url: str = ""
+    duration_seconds: int = 0
+    duration_display: str = ""
+    view_count: int = 0
+    upload_date: str = ""
+    chapters: List[Dict[str, Any]] = Field(default_factory=list)
+    transcript_language: str = ""
+    has_transcript: bool = False
+
+
 class ReadingResponse(BaseModel):
     """Full reading response with summary and research."""
 
@@ -41,6 +56,8 @@ class ReadingResponse(BaseModel):
     saved_at: str
     status: str = "complete"
     source_group: Optional[str] = None
+    media_type: str = "web"
+    youtube: Optional[YouTubeMetadata] = None
     ingestion_job_id: Optional[str] = None
 
 
@@ -55,6 +72,8 @@ class ReadingListItem(BaseModel):
     saved_at: str
     status: str = "complete"
     domain: Optional[str] = None
+    media_type: str = "web"
+    youtube: Optional[YouTubeMetadata] = None
 
 
 class ReadingsListResponse(BaseModel):

@@ -1,11 +1,12 @@
 """Service for save-and-research readings (Wallabag/Instapaper style).
 
 Pipeline:
-1. Crawl the URL via Crawl4AI
-2. Generate an LLM summary with key points
-3. Search for related content via SearXNG
-4. Store the reading in MongoDB
-5. Queue the content for RAG ingestion
+1. Detect URL type (web page, YouTube, etc.)
+2. Extract content (crawl page or fetch transcript)
+3. Generate an LLM summary with key points
+4. Search for related content via SearXNG
+5. Store the reading in MongoDB
+6. Queue the content for RAG ingestion
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import httpx
 import openai
 
 from mdrag.dependencies import AgentDependencies
+from mdrag.integrations.youtube import YouTubeExtractor, is_youtube_url
 from mdrag.settings import load_settings
 
 logger = logging.getLogger(__name__)
@@ -46,7 +48,10 @@ class ReadingsService:
         user_id: str | None = None,
         org_id: str | None = None,
     ) -> Dict[str, Any]:
-        """Save a URL: crawl, summarize, research, and store.
+        """Save a URL: detect type, extract content, summarize, research, store.
+
+        Automatically detects YouTube videos and extracts transcripts.
+        For regular web pages, crawls and extracts text.
 
         Args:
             url: URL to save
@@ -67,17 +72,25 @@ class ReadingsService:
             domain = urlparse(url).netloc
             saved_at = datetime.utcnow().isoformat()
 
-            # Step 1: Crawl the URL
-            logger.info("Crawling URL: %s", url)
-            crawl_result = await self._crawl_url(url)
+            # Step 1: Detect content type and extract
+            if is_youtube_url(url):
+                logger.info("Detected YouTube URL: %s", url)
+                extract_result = await self._extract_youtube(url)
+                media_type = "youtube"
+            else:
+                logger.info("Crawling URL: %s", url)
+                extract_result = await self._crawl_url(url)
+                media_type = "web"
 
-            title = crawl_result.get("title", domain)
-            content = crawl_result.get("content", "")
+            title = extract_result.get("title", domain)
+            content = extract_result.get("content", "")
             word_count = len(content.split()) if content else 0
 
             # Step 2: Generate summary with key points
             logger.info("Generating summary for: %s", title)
-            summary_data = await self._generate_summary(title, content, url)
+            summary_data = await self._generate_summary(
+                title, content, url, media_type=media_type
+            )
 
             # Step 3: Search for related content
             logger.info("Researching related content for: %s", title)
@@ -85,8 +98,8 @@ class ReadingsService:
                 title, summary_data.get("summary", ""), url
             )
 
-            # Step 4: Store in MongoDB
-            reading_doc = {
+            # Step 4: Build reading document
+            reading_doc: Dict[str, Any] = {
                 "_id": reading_id,
                 "url": url,
                 "title": title,
@@ -100,21 +113,37 @@ class ReadingsService:
                 "status": "complete",
                 "source_group": source_group or domain,
                 "domain": domain,
+                "media_type": media_type,
                 "user_id": user_id,
                 "org_id": org_id,
                 "full_content": content,
             }
 
+            # Add YouTube-specific metadata
+            if media_type == "youtube":
+                reading_doc["youtube"] = {
+                    "video_id": extract_result.get("video_id", ""),
+                    "channel": extract_result.get("channel", ""),
+                    "thumbnail_url": extract_result.get("thumbnail_url", ""),
+                    "duration_seconds": extract_result.get("duration_seconds", 0),
+                    "duration_display": extract_result.get("duration_display", ""),
+                    "view_count": extract_result.get("view_count", 0),
+                    "upload_date": extract_result.get("upload_date", ""),
+                    "chapters": extract_result.get("chapters", []),
+                    "transcript_language": extract_result.get("transcript_language", ""),
+                    "has_transcript": bool(content),
+                }
+
+            # Step 5: Store in MongoDB
             collection = self.deps.db["readings"]
             await collection.replace_one(
                 {"_id": reading_id}, reading_doc, upsert=True
             )
 
-            # Step 5: Queue for RAG ingestion (non-blocking)
+            # Step 6: Queue for RAG ingestion (non-blocking)
             job_id = await self._queue_ingestion(url, source_group or domain)
 
             reading_doc["ingestion_job_id"] = job_id
-            # Don't return full_content in API response
             reading_doc.pop("full_content", None)
             reading_doc["id"] = reading_doc.pop("_id")
 
@@ -122,7 +151,6 @@ class ReadingsService:
 
         except Exception as e:
             logger.exception("Error saving reading for %s: %s", url, str(e))
-            # Return a partial result even on error
             return {
                 "id": hashlib.md5(url.encode()).hexdigest()[:16],
                 "url": url,
@@ -191,6 +219,52 @@ class ReadingsService:
 
     # --- Private helpers ---
 
+    async def _extract_youtube(self, url: str) -> Dict[str, Any]:
+        """Extract metadata and transcript from a YouTube video."""
+        extractor = YouTubeExtractor()
+        video_data = await extractor.extract(url)
+
+        if video_data.error:
+            logger.error("YouTube extraction error: %s", video_data.error)
+
+        # Build chapter markers as text for the content
+        chapter_text = ""
+        if video_data.chapters:
+            chapter_lines = []
+            for ch in video_data.chapters:
+                start = ch.get("start_time", 0)
+                m, s = divmod(int(start), 60)
+                h, m = divmod(m, 60)
+                ts = f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+                chapter_lines.append(f"[{ts}] {ch.get('title', '')}")
+            chapter_text = "\n".join(chapter_lines)
+
+        # Build composite content: description + chapters + transcript
+        parts = []
+        if video_data.description:
+            parts.append(f"Description:\n{video_data.description[:2000]}")
+        if chapter_text:
+            parts.append(f"\nChapters:\n{chapter_text}")
+        if video_data.transcript_text:
+            parts.append(f"\nTranscript:\n{video_data.transcript_text}")
+
+        content = "\n\n".join(parts) if parts else ""
+
+        return {
+            "title": video_data.title,
+            "content": content,
+            "video_id": video_data.video_id,
+            "channel": video_data.channel,
+            "thumbnail_url": video_data.thumbnail_url,
+            "duration_seconds": video_data.duration_seconds,
+            "duration_display": video_data.duration_display,
+            "view_count": video_data.view_count,
+            "upload_date": video_data.upload_date,
+            "chapters": video_data.chapters,
+            "transcript_language": video_data.transcript_language,
+            "tags": video_data.tags,
+        }
+
     async def _crawl_url(self, url: str) -> Dict[str, Any]:
         """Crawl a URL and extract content."""
         try:
@@ -258,7 +332,7 @@ class ReadingsService:
             }
 
     async def _generate_summary(
-        self, title: str, content: str, url: str
+        self, title: str, content: str, url: str, media_type: str = "web"
     ) -> Dict[str, Any]:
         """Generate a summary and key points using LLM."""
         settings = self.deps.settings
@@ -268,9 +342,31 @@ class ReadingsService:
         )
 
         # Truncate content for context window
-        truncated = content[:6000] if content else "No content available."
+        truncated = content[:8000] if content else "No content available."
 
-        prompt = f"""Analyze the following web page and provide:
+        if media_type == "youtube":
+            prompt = f"""Analyze the following YouTube video transcript and provide:
+1. A concise summary (2-3 paragraphs) of what the video covers
+2. A list of 3-7 key points, insights, or takeaways from the video
+3. Focus on the substance and arguments made in the video
+
+Video URL: {url}
+Video Title: {title}
+
+Video Content (description, chapters, and transcript):
+{truncated}
+
+Respond in this exact JSON format:
+{{
+  "summary": "Your summary here...",
+  "key_points": ["Point 1", "Point 2", "Point 3"]
+}}
+
+Even if the transcript is auto-generated and has some errors, extract the key ideas.
+If no transcript is available, summarize based on the title and description.
+Return ONLY valid JSON."""
+        else:
+            prompt = f"""Analyze the following web page and provide:
 1. A concise summary (2-3 paragraphs)
 2. A list of 3-7 key points or takeaways
 

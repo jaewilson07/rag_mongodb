@@ -26,6 +26,19 @@ function SavePageInner() {
   const [url, setUrl] = useState(sharedUrl);
   const [tags, setTags] = useState("");
   const [saving, setSaving] = useState(false);
+  interface YouTubeMeta {
+    video_id: string;
+    channel: string;
+    thumbnail_url: string;
+    duration_seconds: number;
+    duration_display: string;
+    view_count: number;
+    upload_date: string;
+    chapters: { title: string; start_time: number; end_time: number }[];
+    transcript_language: string;
+    has_transcript: boolean;
+  }
+
   interface SaveResult {
     id: string;
     url: string;
@@ -35,6 +48,8 @@ function SavePageInner() {
     related_links: { title: string; url: string; snippet: string }[];
     tags: string[];
     status: string;
+    media_type?: string;
+    youtube?: YouTubeMeta;
   }
 
   const [result, setResult] = useState<SaveResult | null>(null);
@@ -236,6 +251,76 @@ function SavePageInner() {
                 </a>
               </div>
             </div>
+
+            {/* YouTube video card */}
+            {result.media_type === "youtube" && result.youtube && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                {result.youtube.thumbnail_url && (
+                  <div className="relative aspect-video bg-black">
+                    <img
+                      src={result.youtube.thumbnail_url}
+                      alt={result.title}
+                      className="w-full h-full object-cover"
+                    />
+                    {result.youtube.duration_display && (
+                      <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white text-xs font-mono">
+                        {result.youtube.duration_display}
+                      </span>
+                    )}
+                    {/* Play button overlay */}
+                    <a
+                      href={result.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute inset-0 flex items-center justify-center group"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-red-600/90 flex items-center justify-center group-hover:bg-red-600 transition-colors shadow-lg">
+                        <svg className="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    </a>
+                  </div>
+                )}
+                <div className="p-4">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                    <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
+                    </svg>
+                    <span className="font-medium">{result.youtube.channel || "YouTube"}</span>
+                    {result.youtube.view_count > 0 && (
+                      <span>{result.youtube.view_count.toLocaleString()} views</span>
+                    )}
+                    {result.youtube.has_transcript && (
+                      <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 text-[10px] font-medium">
+                        Transcript
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Chapters */}
+                {result.youtube.chapters.length > 0 && (
+                  <div className="border-t border-gray-100 px-4 py-3">
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Chapters</h4>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {result.youtube.chapters.map((ch, i) => {
+                        const m = Math.floor(ch.start_time / 60);
+                        const s = Math.floor(ch.start_time % 60);
+                        return (
+                          <div key={i} className="flex items-center gap-2 text-xs">
+                            <span className="font-mono text-indigo-500 w-10 text-right flex-shrink-0">
+                              {m}:{s.toString().padStart(2, "0")}
+                            </span>
+                            <span className="text-gray-700">{ch.title}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Title and summary */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
