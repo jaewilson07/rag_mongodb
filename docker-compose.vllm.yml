@@ -1,0 +1,38 @@
+name: vllm-inference
+
+services:
+  vllm-qwen-coder:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-qwen-coder
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    volumes:
+      - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2  # Both RTX 3090s
+              capabilities: [gpu]
+    command: >
+      --model Qwen/Qwen2.5-Coder-14B-Instruct
+      --tensor-parallel-size 2
+      --gpu-memory-utilization 0.85
+      --max-model-len 32768
+      --trust-remote-code
+      --dtype auto
+      --api-key ${VLLM_API_KEY:-secret-token}
+      --served-model-name qwen-coder
+      --host 0.0.0.0
+      --port 8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s  # Model loading can take 5 minutes
