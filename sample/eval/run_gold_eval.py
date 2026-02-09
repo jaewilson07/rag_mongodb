@@ -1,11 +1,24 @@
-"""Run evaluation against the gold dataset."""
+"""Run evaluation against the gold dataset.
 
+Usage:
+    uv run python sample/eval/run_gold_eval.py
+
+Requirements:
+    - MongoDB with test data ingested
+    - LLM API key for agent responses
+    - Embedding API key for semantic search
+"""
+
+import asyncio
 import json
+import sys
 from pathlib import Path
 
-from src.agent import rag_agent, RAGState
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from mdrag.agent import RAGState, rag_agent
+from mdrag.settings import load_settings
 from pydantic_ai.ag_ui import StateDeps
-
+from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 DATASET_PATH = Path(__file__).with_name("gold_dataset.json")
 
@@ -16,6 +29,16 @@ def load_dataset():
 
 
 async def run_eval():
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "API Keys": check_api_keys(settings, require_llm=True, require_embedding=True),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return
+    
     data = load_dataset()
 
     state = RAGState()
@@ -36,7 +59,11 @@ async def run_eval():
                 elif rag_agent.is_model_request_node(node):
                     async with node.stream(run.ctx) as request_stream:
                         async for event in request_stream:
-                            from pydantic_ai.messages import PartStartEvent, PartDeltaEvent, TextPartDelta
+                            from pydantic_ai.messages import (
+                                PartDeltaEvent,
+                                PartStartEvent,
+                                TextPartDelta,
+                            )
                             if isinstance(event, PartStartEvent) and event.part.part_kind == 'text':
                                 if event.part.content:
                                     response_text += event.part.content

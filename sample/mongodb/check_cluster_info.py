@@ -1,7 +1,7 @@
 """Check MongoDB cluster information and capabilities."""
 
 import asyncio
-from src.settings import load_settings
+from mdrag.settings import load_settings
 from pymongo import AsyncMongoClient
 
 

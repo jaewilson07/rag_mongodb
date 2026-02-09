@@ -1,8 +1,22 @@
-"""Test RAG pipeline components without requiring LLM API."""
+"""Test RAG pipeline components without requiring LLM API.
+
+Usage:
+    uv run python sample/retrieval/test_rag_pipeline.py
+
+Requirements:
+    - MongoDB with vector and text indexes
+    - Embedding API key for semantic search
+"""
 
 import asyncio
-from src.dependencies import AgentDependencies
-from src.tools import semantic_search, hybrid_search
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from mdrag.dependencies import AgentDependencies
+from mdrag.settings import load_settings
+from mdrag.tools import hybrid_search, semantic_search
+from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 
 class MockContext:
@@ -16,6 +30,16 @@ async def test_rag_pipeline():
     print("="*80)
     print("Testing RAG Pipeline Components")
     print("="*80)
+    
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "API Keys": check_api_keys(settings, require_llm=False, require_embedding=True),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return 1
 
     deps = AgentDependencies()
     await deps.initialize()

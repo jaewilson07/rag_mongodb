@@ -2,7 +2,7 @@
 
 import asyncio
 from pymongo import AsyncMongoClient
-from src.settings import load_settings
+from mdrag.settings import load_settings
 
 
 async def main():

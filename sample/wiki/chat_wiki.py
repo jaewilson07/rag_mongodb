@@ -8,14 +8,24 @@ Demonstrates the streaming chat pipeline:
 Usage:
     uv run python sample/wiki/chat_wiki.py --question "How does authentication work?"
     uv run python sample/wiki/chat_wiki.py --question "Explain the data model" --context "API Docs"
+
+Requirements:
+    - MongoDB with vector and text indexes
+    - LLM API key for chat
+    - Embedding API key for search
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.server.services.wiki import WikiService
+from mdrag.settings import load_settings
+from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 DEFAULT_QUESTION = "What topics are covered in the knowledge base?"
 
@@ -39,6 +49,17 @@ def _parse_args() -> argparse.Namespace:
 
 async def _run() -> None:
     args = _parse_args()
+    
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "API Keys": check_api_keys(settings, require_llm=True, require_embedding=True),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return
+    
     service = WikiService()
 
     print(f"Question: {args.question}")

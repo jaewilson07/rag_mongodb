@@ -4,13 +4,27 @@ Tests:
 1. Full ingestion pipeline validation
 2. Database content verification
 3. Agent question-answering with document-specific queries
+
+Usage:
+    uv run python sample/rag/comprehensive_e2e_test.py
+
+Requirements:
+    - MongoDB with vector and text indexes
+    - LLM API key for agent responses
+    - Embedding API key for semantic search
+    - NeuralFlow AI test documents (13 files)
 """
 
 import asyncio
-from src.dependencies import AgentDependencies
-from src.agent import rag_agent, RAGState
-from pydantic_ai.ag_ui import StateDeps
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from mdrag.agent import RAGState, rag_agent
+from mdrag.dependencies import AgentDependencies
+from mdrag.settings import load_settings
+from pydantic_ai.ag_ui import StateDeps
+from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 # Document-specific test questions based on actual content
 TEST_QUESTIONS = [
@@ -210,7 +224,11 @@ async def test_agent_question(question_data: dict, agent_state, agent_deps):
             elif rag_agent.is_model_request_node(node):
                 async with node.stream(run.ctx) as request_stream:
                     async for event in request_stream:
-                        from pydantic_ai.messages import PartStartEvent, PartDeltaEvent, TextPartDelta
+                        from pydantic_ai.messages import (
+                            PartDeltaEvent,
+                            PartStartEvent,
+                            TextPartDelta,
+                        )
                         if isinstance(event, PartStartEvent) and event.part.part_kind == 'text':
                             if event.part.content:
                                 response_text += event.part.content
@@ -270,6 +288,16 @@ async def main():
     print("COMPREHENSIVE END-TO-END TESTING")
     print("MongoDB RAG Agent - Document-Specific Validation")
     print("="*80)
+    
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "API Keys": check_api_keys(settings, require_llm=True, require_embedding=True),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return 1
 
     # Step 1: Deep database validation
     print("\nSTEP 1: Validating ingested data...")

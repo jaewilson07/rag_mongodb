@@ -5,16 +5,33 @@ documents by source_type from MongoDB.
 
 Usage:
     uv run python sample/wiki/list_projects.py
+
+Requirements:
+    - MongoDB with ingested documents
 """
 
 from __future__ import annotations
 
 import asyncio
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.server.services.wiki import WikiService
+from mdrag.settings import load_settings
+from utils import check_mongodb, print_pre_flight_results
 
 
 async def _run() -> None:
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return
+    
     service = WikiService()
     projects = await service.list_projects()
 

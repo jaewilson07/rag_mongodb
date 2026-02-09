@@ -182,48 +182,6 @@ When: initializing CLI or batch scripts.
 Example: src/logging_config.py
 Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
 
-## JIT Index (Component Map)
-
-### Stack-Level Documentation
-- src/AGENTS.md - core runtime, tools, CLI patterns
-- src/ingestion/AGENTS.md - ingestion and chunking pipeline
-
-### Component-Level Documentation
-- examples/AGENTS.md - reference-only patterns
-- test_scripts/AGENTS.md - validation and smoke tests
-
-## Search Hints
-
-# Find hybrid search
-- /bin/grep -R "def hybrid_search" -n src
-
-# Find ingestion pipeline
-- /bin/grep -R "class DocumentIngestionPipeline" -n src/ingestion
-
-# Find Crawl4AI integration
-- /bin/grep -R "class Crawl4AIClient" -n src
-
-# Find Google Drive integration
-- /bin/grep -R "class GoogleDriveClient" -n src
-
-# Find dependencies
-- /bin/grep -R "class AgentDependencies" -n src
-
-## Error Handling Protocol
-
-1. MongoDB connection failures:
-   - Verify MONGODB_URI, then ping in AgentDependencies.
-2. Missing index errors (code 291):
-   - Create vector/search indexes in Atlas UI.
-3. Embedding failures:
-   - Check EMBEDDING_API_KEY and EMBEDDING_MODEL.
-4. Docling conversion errors:
-   - Log and continue; do not crash ingestion.
-5. Google Drive access errors:
-   - Verify GOOGLE_SERVICE_ACCOUNT_FILE and optional impersonation subject.
-6. Deduplication:
-   - Upsert on content_hash prevents exact duplicate chunks. For source-level deduplication, consider using a source-identity key (e.g., URL).
-
 ## Agent Gotchas
 
 1. Hybrid search uses manual RRF in src/tools.py (not $rankFusion).
@@ -232,3 +190,19 @@ Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
 4. Examples folder is reference-only and should not be modified.
 5. Ingestion is non-destructive by default; use `--clean` to wipe collections.
 6. Crawl4AI requires the crawl4ai package (and Playwright runtime when crawling).
+
+## Local Inference & vLLM Patterns
+
+### vLLM Quantization (Compressed Tensors)
+- **Pattern**: For newer quantized models (AWQ/GPTQ) that use the `llm-compressor` format, the model config often specifies `quantization_method: "compressed-tensors"`.
+- **Rule**: You **must** explicitly set `--quantization compressed-tensors` in the launch command for these models. vLLM's `auto` detection frequently fails to map this correctly, resulting in configuration mismatch errors.
+
+### GLM-4.7 Memory Thresholds
+- **Pattern**: GLM-4.7 (and similar MoE models) have significant activation overhead beyond their static weight size.
+- **Rule**: On a 48GB VRAM setup (e.g., 2x RTX 3090), the 31GB BF16 `GLM-4.7-Flash` is unstable. Always use a 4-bit quantized version (~6-10GB) to provide sufficient headroom for the KV cache and MoE-specific buffers.
+
+### Multi-GPU Coordination
+- **Rule**: Ensure the `--tensor-parallel-size` in the vLLM command matches the exact number of GPUs reserved in the `docker-compose.yml` `deploy` section.
+- **Rule**: Use `--gpu-memory-utilization 0.90` as a safe default for quantized models; only push to `0.95` for full-precision models where every MB counts, as it increases the risk of OOM during peak activation.
+
+## JIT Index (Component Map)

@@ -59,6 +59,7 @@ package-dir = {mdrag = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["mdrag*"]
+exclude = ["*.egg-info", "__pycache__", "*/__pycache__", "*/*/__pycache__"]
 
 [dependency-groups]
 dev = [

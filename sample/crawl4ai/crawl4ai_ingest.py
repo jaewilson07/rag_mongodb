@@ -1,13 +1,33 @@
-"""Sample script to ingest a Crawl4AI URL into MongoDB RAG."""
+"""Sample script to ingest a Crawl4AI URL into MongoDB RAG.
+
+Usage:
+    uv run python sample/crawl4ai/crawl4ai_ingest.py --url https://example.com
+    uv run python sample/crawl4ai/crawl4ai_ingest.py --url https://example.com --deep --max-depth 2
+
+Requirements:
+    - MongoDB for storage
+    - Playwright runtime for web crawling
+    - Embedding API key for chunk embeddings
+"""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.ingestion.ingest import IngestionWorkflow
 from mdrag.ingestion.models import IngestionConfig, WebCollectionRequest
 from mdrag.ingestion.sources import Crawl4AICollector
+from mdrag.settings import load_settings
+from utils import (
+    check_api_keys,
+    check_mongodb,
+    check_playwright,
+    print_pre_flight_results,
+)
 
 DEFAULT_URL = "https://example.com"
 
@@ -33,6 +53,21 @@ def _parse_args() -> argparse.Namespace:
 
 async def _run() -> None:
     args = _parse_args()
+    
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "Playwright": check_playwright(),
+        "API Keys": check_api_keys(settings, require_llm=False, require_embedding=True),
+    }
+    
+    if not print_pre_flight_results(checks):
+        print("\n   Setup instructions:")
+        print("   1. Install Playwright: playwright install")
+        print("   2. Set EMBEDDING_API_KEY in .env")
+        return
+    
     workflow = IngestionWorkflow(config=IngestionConfig())
     await workflow.initialize()
     try:

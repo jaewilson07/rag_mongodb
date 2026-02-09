@@ -1,8 +1,24 @@
-"""End-to-end agent testing with real queries."""
+"""End-to-end agent testing with real queries.
+
+Usage:
+    uv run python sample/rag/test_agent_e2e.py
+
+Requirements:
+    - MongoDB with vector and text indexes
+    - LLM API key for agent responses
+    - Embedding API key for semantic search
+"""
 
 import asyncio
+import sys
+from pathlib import Path
+
 from pydantic_ai.ag_ui import StateDeps
-from src.agent import rag_agent, RAGState
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from mdrag.agent import RAGState, rag_agent
+from mdrag.settings import load_settings
+from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 # Test queries covering different scenarios
 TEST_QUERIES = [
@@ -83,7 +99,11 @@ async def test_single_query(query_info: dict, message_history: list) -> tuple[st
             elif rag_agent.is_model_request_node(node):
                 async with node.stream(run.ctx) as request_stream:
                     async for event in request_stream:
-                        from pydantic_ai.messages import PartStartEvent, PartDeltaEvent, TextPartDelta
+                        from pydantic_ai.messages import (
+                            PartDeltaEvent,
+                            PartStartEvent,
+                            TextPartDelta,
+                        )
                         if isinstance(event, PartStartEvent) and event.part.part_kind == 'text':
                             if event.part.content:
                                 response_text += event.part.content
@@ -156,6 +176,16 @@ async def main():
     print("="*80)
     print("MongoDB RAG Agent - End-to-End Testing")
     print("="*80)
+    
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "API Keys": check_api_keys(settings, require_llm=True, require_embedding=True),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return 1
 
     message_history = []
     results = []

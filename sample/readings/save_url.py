@@ -10,6 +10,13 @@ Usage:
     uv run python sample/readings/save_url.py --url https://example.com
     uv run python sample/readings/save_url.py --url "https://youtu.be/PAh870We7tI"
     uv run python sample/readings/save_url.py --url "https://x.com/user/status/123" --tags ai,tech
+
+Requirements:
+    - MongoDB for storage
+    - Redis for job queue
+    - SearXNG for related content search
+    - LLM API key for summarization
+    - Crawl4AI + Playwright for web crawling
 """
 
 from __future__ import annotations
@@ -17,8 +24,19 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.server.services.readings import ReadingsService
+from mdrag.settings import load_settings
+from utils import (
+    check_api_keys,
+    check_mongodb,
+    check_redis,
+    check_searxng,
+    print_pre_flight_results,
+)
 
 DEFAULT_URL = "https://example.com"
 
@@ -43,6 +61,26 @@ def _parse_args() -> argparse.Namespace:
 
 async def _run() -> None:
     args = _parse_args()
+    
+    # Pre-flight checks
+    settings = load_settings()
+    redis_url = getattr(settings, 'redis_url', 'redis://localhost:6379/0')
+    searxng_url = getattr(settings, 'searxng_url', 'http://localhost:7080')
+    
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "Redis": await check_redis(redis_url),
+        "SearXNG": await check_searxng(searxng_url),
+        "API Keys": check_api_keys(settings, require_llm=True, require_embedding=False),
+    }
+    
+    if not print_pre_flight_results(checks):
+        print("\n   Setup instructions:")
+        print("   1. Start services: docker-compose up -d redis searxng")
+        print("   2. Set LLM_API_KEY in .env")
+        print("   3. For web crawling: playwright install")
+        return
+    
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
 
     print(f"Saving URL: {args.url}")

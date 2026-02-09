@@ -42,6 +42,9 @@ htmlcov/
 *~
 .DS_Store
 
+# Sample script exports (generated content)
+sample/**/EXPORTS/
+
 # UV
 uv.lock
 

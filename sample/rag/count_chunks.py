@@ -6,7 +6,7 @@ import asyncio
 
 from pymongo import AsyncMongoClient
 
-from mdrag.settings import load_settings  # type: ignore[import-not-found]
+from mdrag.settings import load_settings
 
 
 async def _run() -> None:

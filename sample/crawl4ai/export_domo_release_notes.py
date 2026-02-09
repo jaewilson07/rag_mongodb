@@ -1,18 +1,32 @@
-"""Export Domo release notes HTML and selector-scoped markdown via Crawl4AI."""
+"""Export Domo release notes HTML and selector-scoped markdown via Crawl4AI.
+
+Usage:
+    uv run python sample/crawl4ai/export_domo_release_notes.py
+    uv run python sample/crawl4ai/export_domo_release_notes.py --url https://example.com
+
+Requirements:
+    - Playwright runtime for web crawling
+"""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
-from mdrag.integrations.crawl4ai import Crawl4AIClient  # type: ignore[import-not-found]
-from mdrag.integrations.models import Source  # type: ignore[import-not-found]
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from mdrag.integrations.models import Source
+from utils import check_playwright, print_pre_flight_results
 
-DEFAULT_URL = "https://domo-support.domo.com/s/article/Current-Release-Notes?language=en_US"
+from mdrag.integrations.crawl4ai import Crawl4AIClient
+
+DEFAULT_URL = (
+    "https://domo-support.domo.com/s/article/Current-Release-Notes?language=en_US"
+)
 DEFAULT_SELECTOR = (
     ".slds-rich-text-editor__output.uiOutputRichText.forceOutputRichText"
     ".selfServiceOutputRichTextWithSmartLinks"
@@ -115,6 +129,18 @@ async def _run_export(
 
 def main() -> None:
     args = _parse_args()
+
+    # Pre-flight check for Playwright
+    checks = {
+        "Playwright": check_playwright(),
+    }
+
+    if not print_pre_flight_results(checks):
+        print("\n   Setup instructions:")
+        print("   1. Install Playwright: playwright install")
+        print("   2. Optional: playwright install-deps (Linux system dependencies)")
+        return
+
     sample_dir = Path(__file__).resolve().parent
     output_dir = (
         Path(args.output_dir)

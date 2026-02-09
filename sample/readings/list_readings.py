@@ -3,14 +3,22 @@
 Usage:
     uv run python sample/readings/list_readings.py
     uv run python sample/readings/list_readings.py --limit 10
+
+Requirements:
+    - MongoDB with saved readings
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.server.services.readings import ReadingsService
+from mdrag.settings import load_settings
+from utils import check_mongodb, print_pre_flight_results
 
 
 def _parse_args() -> argparse.Namespace:
@@ -25,6 +33,16 @@ def _parse_args() -> argparse.Namespace:
 
 async def _run() -> None:
     args = _parse_args()
+    
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return
+    
     service = ReadingsService()
     result = await service.list_readings(limit=args.limit)
 

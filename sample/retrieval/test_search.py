@@ -1,12 +1,30 @@
-"""Test search functions with MongoDB database."""
+"""Test search functions with MongoDB database.
+
+Usage:
+    uv run python sample/retrieval/test_search.py
+
+Requirements:
+    - MongoDB with vector and text indexes
+    - Embedding API key for generating query embeddings
+"""
 
 import asyncio
-from src.dependencies import AgentDependencies
-from src.tools import semantic_search, hybrid_search
+
+# Import pre-flight utilities
+import sys
+from pathlib import Path
+
+from mdrag.dependencies import AgentDependencies
+from mdrag.settings import load_settings
+from mdrag.tools import hybrid_search, semantic_search
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 
 class MockContext:
     """Mock context for search functions."""
+
     def __init__(self, deps):
         self.deps = deps
 
@@ -35,11 +53,13 @@ async def test_semantic_search():
     await deps.initialize()
     ctx = MockContext(deps)
 
-    results = await semantic_search(ctx, 'test query', match_count=5)
+    results = await semantic_search(ctx, "test query", match_count=5)
     print(f"Semantic search returned {len(results)} results")
 
     if results:
-        print(f"Top result: {results[0].document_title} (similarity: {results[0].similarity:.3f})")
+        print(
+            f"Top result: {results[0].document_title} (similarity: {results[0].similarity:.3f})"
+        )
 
     await deps.cleanup()
     return len(results) > 0
@@ -52,7 +72,7 @@ async def test_hybrid_search():
     await deps.initialize()
     ctx = MockContext(deps)
 
-    results = await hybrid_search(ctx, 'MongoDB vector search', match_count=5)
+    results = await hybrid_search(ctx, "MongoDB vector search", match_count=5)
     print(f"Hybrid search returned {len(results)} results")
 
     if results:
@@ -69,12 +89,23 @@ async def main():
     print("MongoDB RAG Agent - Search Function Tests")
     print("=" * 60)
 
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "API Keys": check_api_keys(settings, require_llm=False, require_embedding=True),
+    }
+
+    if not print_pre_flight_results(checks):
+        print("Resolve the issues above before running this sample.")
+        return
+
     try:
         # Test connection
         has_data = await test_database_connection()
         if not has_data:
             print("\n[WARNING] No data in database. Run ingestion first:")
-            print("  uv run python -m src.ingestion.ingest -d documents")
+            print("  uv run python -m mdrag.ingestion.ingest -d documents")
             return
 
         # Test searches
@@ -88,6 +119,7 @@ async def main():
     except Exception as e:
         print(f"\n[ERROR] Test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

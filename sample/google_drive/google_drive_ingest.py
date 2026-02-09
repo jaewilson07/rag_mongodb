@@ -1,19 +1,37 @@
-"""Sample script to ingest a Google Drive file into MongoDB RAG."""
+"""Sample script to ingest a Google Drive file into MongoDB RAG.
+
+Usage:
+    uv run python sample/google_drive/google_drive_ingest.py
+    uv run python sample/google_drive/google_drive_ingest.py --file-id "1h7HGpc41HzOHtdcXs6YLpBojYLHVEWxeOAZQTTw7qds"
+
+Requirements:
+    - MongoDB for storage
+    - Google Drive API credentials (service account or OAuth)
+    - Embedding API key for chunk embeddings
+"""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.ingestion.ingest import IngestionWorkflow
 from mdrag.ingestion.models import GoogleDriveCollectionRequest, IngestionConfig
 from mdrag.ingestion.sources import GoogleDriveCollector
 from mdrag.mdrag_logging.service_logging import get_logger
 from mdrag.settings import load_settings
+from utils import (
+    check_api_keys,
+    check_google_credentials,
+    check_mongodb,
+    print_pre_flight_results,
+)
 
 DEFAULT_FILE_ID = "1h7HGpc41HzOHtdcXs6YLpBojYLHVEWxeOAZQTTw7qds"
 SCRIPT_DIR = Path(__file__).parent
@@ -36,10 +54,20 @@ async def _run() -> None:
     load_dotenv(SCRIPT_DIR.parent.parent / ".env")
     args = _parse_args()
     settings = load_settings()
-    if not settings.google_service_account_file:
-        await logger.warning(
-            "Missing Google service account credentials. Set GOOGLE_SERVICE_ACCOUNT_FILE."
-        )
+
+    # Pre-flight checks
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "Google Credentials": check_google_credentials(settings),
+        "API Keys": check_api_keys(settings, require_llm=False, require_embedding=True),
+    }
+
+    if not print_pre_flight_results(checks):
+        print("\n   Setup instructions:")
+        print("   1. Create service account in Google Cloud Console")
+        print("   2. Download JSON key and set GOOGLE_SERVICE_ACCOUNT_FILE in .env")
+        print("   3. Share target files/folders with service account email")
+        print("   4. Set EMBEDDING_API_KEY in .env")
         return
 
     workflow = IngestionWorkflow(config=IngestionConfig(), settings=settings)

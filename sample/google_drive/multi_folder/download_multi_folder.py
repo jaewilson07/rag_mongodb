@@ -1,16 +1,26 @@
-"""Sample script to recursively export Google Drive folder files to markdown."""
+"""Sample script to recursively export Google Drive folder files to markdown.
+
+Usage:
+    uv run python sample/google_drive/multi_folder/download_multi_folder.py
+
+Requirements:
+    - Google Drive OAuth credentials (GDOC_CLIENT, GDOC_TOKEN, etc.)
+"""
 
 from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from mdrag.mdrag_logging.service_logging import get_logger
-from mdrag.integrations.google_drive import GoogleDriveService
+from utils import print_pre_flight_results
 
+from mdrag.integrations.google_drive import GoogleDriveService
 
 logger = get_logger(__name__)
 
@@ -30,6 +40,7 @@ async def main() -> None:
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     await logger.info(f"Export directory: {EXPORT_DIR.absolute()}")
 
+    # Pre-flight check for credentials
     missing = [
         name
         for name in (
@@ -40,11 +51,22 @@ async def main() -> None:
         )
         if not os.getenv(name)
     ]
+
     if missing:
-        await logger.warning(
-            "Missing Google Drive credentials. Set these env vars in sample/.env: "
-            + ", ".join(missing)
+        checks = {
+            "Google OAuth": {
+                "status": "error",
+                "message": f"Missing credentials: {', '.join(missing)}",
+            }
+        }
+        print_pre_flight_results(checks)
+        print("\n   Setup instructions:")
+        print("   1. Create OAuth 2.0 credentials in Google Cloud Console")
+        print("   2. Run OAuth flow to get tokens")
+        print(
+            "   3. Set GDOC_CLIENT, GDOC_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET in .env"
         )
+        print("   See sample/google_drive/single_file/README.md for detailed setup")
         return
 
     service = GoogleDriveService(

@@ -1,16 +1,23 @@
-# pyright: reportMissingImports=false
-"""Sample: convert pydantic.txt into DoclingChunks with intelligent subsetting."""
+"""Sample: convert pydantic.txt into DoclingChunks with intelligent subsetting.
+
+Usage:
+    uv run python sample/docling/chunk_pydantic_sample.py
+
+Requirements:
+    - Docling + transformers for processing
+    - pydantic.txt file in sample/docling/ directory
+"""
 
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
 
-from mdrag.ingestion.docling.chunker import ChunkingConfig, create_chunker  # type: ignore[reportMissingImports]
-from mdrag.ingestion.docling.processor import DoclingProcessor  # type: ignore[reportMissingImports]
-from mdrag.ingestion.models import IngestionDocument, UploadCollectionRequest  # type: ignore[reportMissingImports]
-from mdrag.ingestion.sources.upload_source import UploadCollector  # type: ignore[reportMissingImports]
-from mdrag.settings import load_settings  # type: ignore[reportMissingImports]
+from mdrag.ingestion.docling.chunker import ChunkingConfig, create_chunker
+from mdrag.ingestion.docling.processor import DoclingProcessor
+from mdrag.ingestion.models import IngestionDocument, UploadCollectionRequest
+from mdrag.ingestion.sources.upload_source import UploadCollector
+from mdrag.settings import load_settings
 
 
 def subset_markdown_by_headings(
@@ -84,6 +91,13 @@ async def build_subset_document(file_path: Path) -> IngestionDocument:
 
 async def main() -> None:
     file_path = Path("sample/docling/pydantic.txt").resolve()
+
+    # Check if file exists
+    if not file_path.exists():
+        print(f"❌ File not found: {file_path}")
+        print("\n   This sample requires the pydantic.txt file to exist.")
+        return
+
     document = await build_subset_document(file_path)
 
     chunker = create_chunker(

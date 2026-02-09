@@ -1,16 +1,27 @@
-"""Sample script to query SearXNG and export results as Source markdown."""
+"""Sample script to query SearXNG and export results as Source markdown.
+
+Usage:
+    uv run python sample/searxng/query_searxng.py --query "AI developments"
+    uv run python sample/searxng/query_searxng.py --query "python tutorials" --result-count 10
+
+Requirements:
+    - SearXNG service running (default: http://localhost:7080)
+"""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from mdrag.integrations.models import Source, SourceFrontmatter  # type: ignore[import-not-found]
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from mdrag.integrations.models import Source, SourceFrontmatter
+from utils import check_searxng, print_pre_flight_results
 
 DEFAULT_QUERY = "what are the agentic ai capabilities of Domo's AI service layer"
 DEFAULT_SEARXNG_URL = "http://localhost:7080"
@@ -52,7 +63,9 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _safe_filename(value: str, max_len: int = 80) -> str:
-    cleaned = "".join(char if char.isalnum() else "-" for char in value.lower()).strip("-")
+    cleaned = "".join(char if char.isalnum() else "-" for char in value.lower()).strip(
+        "-"
+    )
     while "--" in cleaned:
         cleaned = cleaned.replace("--", "-")
     if not cleaned:
@@ -203,8 +216,20 @@ def main() -> None:
         if args.output_dir
         else sample_dir / DEFAULT_OUTPUT_DIRNAME
     )
-    asyncio.run(
-        _run_export(
+
+    # Pre-flight check for SearXNG
+    async def check_and_run():
+        checks = {
+            "SearXNG": await check_searxng(args.searxng_url),
+        }
+
+        if not print_pre_flight_results(checks):
+            print("\n   Setup instructions:")
+            print("   1. Start SearXNG: docker-compose up -d searxng")
+            print(f"   2. Verify at: {args.searxng_url}")
+            return
+
+        await _run_export(
             query=args.query,
             searxng_url=args.searxng_url,
             result_count=args.result_count,
@@ -212,7 +237,8 @@ def main() -> None:
             categories=args.categories,
             engines=args.engines,
         )
-    )
+
+    asyncio.run(check_and_run())
 
 
 if __name__ == "__main__":

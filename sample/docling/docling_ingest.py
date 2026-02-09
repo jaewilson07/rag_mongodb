@@ -1,14 +1,28 @@
-"""Sample script to ingest a local file into MongoDB RAG."""
+"""Sample script to ingest a local file into MongoDB RAG.
+
+Usage:
+    uv run python sample/docling/docling_ingest.py
+    uv run python sample/docling/docling_ingest.py --file-path /path/to/document.pdf
+
+Requirements:
+    - MongoDB for storage
+    - Embedding API key for chunk embeddings
+    - Docling + transformers for document processing
+"""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.ingestion.ingest import IngestionWorkflow
 from mdrag.ingestion.models import IngestionConfig, UploadCollectionRequest
 from mdrag.ingestion.sources import UploadCollector
+from mdrag.settings import load_settings
+from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 DEFAULT_FILE = Path(__file__).resolve().parent / "pydantic.txt"
 
@@ -27,6 +41,17 @@ def _parse_args() -> argparse.Namespace:
 
 async def _run() -> None:
     args = _parse_args()
+    
+    # Pre-flight checks
+    settings = load_settings()
+    checks = {
+        "MongoDB": await check_mongodb(settings),
+        "API Keys": check_api_keys(settings, require_llm=False, require_embedding=True),
+    }
+    
+    if not print_pre_flight_results(checks):
+        return
+    
     workflow = IngestionWorkflow(config=IngestionConfig())
     await workflow.initialize()
     try:
