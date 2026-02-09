@@ -18,7 +18,7 @@ result = converter.convert(file_path)
 # Get markdown representation
 markdown_content = result.document.export_to_markdown()
 
-# Keep DoclingDocument for HierarchicalChunker
+# Keep DoclingDocument for HybridChunker
 docling_doc = result.document
 ```
 
@@ -51,12 +51,12 @@ def convert_document_safe(file_path: str):
         return None, None
 ```
 
-## HierarchicalChunker
+## HybridChunker
 
 ### Basic Setup
 
 ```python
-from docling.chunking import HierarchicalChunker
+from docling.chunking import HybridChunker
 from transformers import AutoTokenizer
 
 # Initialize tokenizer (reuse across documents)
@@ -64,14 +64,14 @@ model_id = "sentence-transformers/all-MiniLM-L6-v2"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 # Create chunker
-chunker = HierarchicalChunker(
+chunker = HybridChunker(
     tokenizer=tokenizer,
     max_tokens=512,      # Match embedding model limits
     merge_peers=True     # Merge small adjacent chunks
 )
 ```
 
-**Why HierarchicalChunker?**
+**Why HybridChunker?**
 - **Token-aware**: Uses actual tokenizer, not character estimates
 - **Structure-preserving**: Respects paragraphs, sections, tables
 - **Contextualized**: Includes heading hierarchy in each chunk
@@ -82,31 +82,90 @@ chunker = HierarchicalChunker(
 ```python
 from typing import List
 
-from mdrag.ingestion.docling.chunker import DoclingChunks, DoclingHierarchicalChunker
-from mdrag.ingestion.models import IngestionDocument
-
 async def chunk_document(
-    document: IngestionDocument,
-    chunker: DoclingHierarchicalChunker,
-) -> List[DoclingChunks]:
+    content: str,
+    title: str,
+    source: str,
+    metadata: dict,
+    docling_doc,  # DoclingDocument from converter
+    chunker: HybridChunker
+) -> List[DocumentChunk]:
     """
-    Chunk a document using Docling's HierarchicalChunker.
+    Chunk a document using Docling's HybridChunker.
 
     Args:
-        document: Docling-processed ingestion document
-        chunker: DoclingHierarchicalChunker instance
+        content: Document content (markdown format)
+        title: Document title
+        source: Document source path
+        metadata: Additional metadata
+        docling_doc: DoclingDocument from converter (REQUIRED)
+        chunker: HybridChunker instance
 
     Returns:
-        List of DoclingChunks with contextualized content
+        List of document chunks with contextualized content
     """
-    if not document.content.strip():
-        logger.warning(
-            "no_content",
-            document_uid=document.metadata.identity.document_uid,
-        )
+    if not docling_doc:
+        logger.warning("no_docling_doc", title=title)
         return []
 
-    return await chunker.chunk_document(document)
+    base_metadata = {
+        "title": title,
+        "source": source,
+        "chunk_method": "hybrid",
+        **metadata
+    }
+
+    try:
+        # Chunk the DoclingDocument
+        chunk_iter = chunker.chunk(dl_doc=docling_doc)
+        chunks = list(chunk_iter)
+
+        # Convert to DocumentChunk objects
+        document_chunks = []
+        current_pos = 0
+
+        for i, chunk in enumerate(chunks):
+            # Get contextualized text (includes heading hierarchy)
+            contextualized_text = chunker.contextualize(chunk=chunk)
+
+            # Count actual tokens
+            token_count = len(tokenizer.encode(contextualized_text))
+
+            # Create chunk metadata
+            chunk_metadata = {
+                **base_metadata,
+                "chunk_index": i,
+                "total_chunks": len(chunks),
+                "token_count": token_count,
+                "has_context": True
+            }
+
+            # Estimate character positions
+            start_char = current_pos
+            end_char = start_char + len(contextualized_text)
+
+            document_chunks.append(DocumentChunk(
+                content=contextualized_text.strip(),
+                index=i,
+                start_char=start_char,
+                end_char=end_char,
+                metadata=chunk_metadata,
+                token_count=token_count
+            ))
+
+            current_pos = end_char
+
+        logger.info(
+            "chunks_created",
+            title=title,
+            count=len(document_chunks),
+            avg_tokens=sum(c.token_count for c in document_chunks) // len(document_chunks)
+        )
+        return document_chunks
+
+    except Exception as e:
+        logger.exception("chunking_failed", title=title)
+        return []
 ```
 
 ### Contextualization Example
@@ -116,7 +175,7 @@ async def chunk_document(
 The system uses a distributed architecture for scalability.
 ```
 
-**With context (from HierarchicalChunker):**
+**With context (from HybridChunker):**
 ```
 # Technical Architecture
 
@@ -132,24 +191,24 @@ The heading hierarchy provides crucial context for retrieval!
 ### Configuration Options
 
 ```python
-from docling.chunking import HierarchicalChunker
+from docling.chunking import HybridChunker
 
 # Conservative chunking (smaller, more chunks)
-chunker = HierarchicalChunker(
+chunker = HybridChunker(
     tokenizer=tokenizer,
     max_tokens=256,      # Smaller chunks
     merge_peers=False    # Don't merge
 )
 
 # Aggressive chunking (larger, fewer chunks)
-chunker = HierarchicalChunker(
+chunker = HybridChunker(
     tokenizer=tokenizer,
     max_tokens=1024,     # Larger chunks
     merge_peers=True     # Merge small chunks
 )
 
 # Recommended for RAG
-chunker = HierarchicalChunker(
+chunker = HybridChunker(
     tokenizer=tokenizer,
     max_tokens=512,      # Fits most embedding models
     merge_peers=True     # Balance chunk count
@@ -455,7 +514,7 @@ chunks = chunker.chunk(dl_doc=docling_doc)
 
 ```python
 # Reduce max_tokens in chunker
-chunker = HierarchicalChunker(
+chunker = HybridChunker(
     tokenizer=tokenizer,
     max_tokens=256,  # Smaller chunks
     merge_peers=False
