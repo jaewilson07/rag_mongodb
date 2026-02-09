@@ -46,7 +46,8 @@ from mdrag.ingestion.protocols import SourceCollector
 import sys
 
 from mdrag.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
-from mdrag.ingestion.storage import MongoStorageAdapter
+from mdrag.ingestion.protocols import StorageAdapter
+from mdrag.integrations.mongodb.adapters.storage import MongoStorageAdapter
 from mdrag.integrations.google_drive import parse_csv_values
 from mdrag.mdrag_logging.service_logging import get_logger, log_async, setup_logging
 from mdrag.settings import Settings, load_settings
@@ -71,7 +72,7 @@ class IngestionWorkflow:
         processor: Optional[DoclingProcessor] = None,
         chunker: Optional[DoclingHierarchicalChunker] = None,
         embedder: Optional[EmbeddingGenerator] = None,
-        storage: Optional[MongoStorageAdapter] = None,
+        storage: Optional[StorageAdapter] = None,
     ) -> None:
         """Initialize the ingestion workflow.
 

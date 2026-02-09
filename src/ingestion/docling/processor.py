@@ -108,7 +108,7 @@ class DoclingProcessor:
 
         metadata = IngestionMetadata(
             identity=identity,
-            namespace=namespace,
+            namespace=Namespace(**namespace.model_dump()),
             frontmatter=frontmatter,
             collected_at=frontmatter.source_fetched_at or ingestion_timestamp(),
             ingested_at=ingestion_timestamp(),

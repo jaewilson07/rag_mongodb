@@ -1,6 +1,7 @@
-"""Memory Gateway - Unified interface for Neo4j and MongoDB operations."""
+"""Backward compatibility: redirect to mdrag.capabilities.memory."""
 
-from .gateway import MemoryGateway
-from .models import MemoryRequest, MemoryResponse, MemoryType
+import sys
 
-__all__ = ["MemoryGateway", "MemoryRequest", "MemoryResponse", "MemoryType"]
+from mdrag.capabilities import memory as _memory
+
+sys.modules["mdrag.memory_gateway"] = _memory

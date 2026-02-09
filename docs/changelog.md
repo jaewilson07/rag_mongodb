@@ -6,6 +6,15 @@
 
 ## Recent Updates
 
+### 2026-02-09 - src/ Folder Reorganization (Layered Architecture)
+
+- **Phase 1 (Core)**: `core/` (exceptions, logging, telemetry, validation), `config/` (settings, validate_config). `MDRAGException` base; `ValidationError` subclasses it; `ConfigError` in config.
+- **Phase 2 (Protocols)**: `integrations/mongodb/adapters/storage.py` with `MongoStorageAdapter`; `ingestion/storage.py` re-exports for backward compat.
+- **Phase 3 (Capabilities)**: `capabilities/ingestion`, `capabilities/retrieval`, `capabilities/query`, `capabilities/memory`; `integrations/llm`, `integrations/memgpt`. Exception modules in each capability.
+- **Phase 4 (Workflows)**: `workflows/rag/dependencies.py` (`AgentDependencies`); `interfaces/api/` (server moved); `workflows/rag/wiki/readings` exception modules.
+- **Backward compat**: `mdrag.settings`, `mdrag.validation`, `mdrag.ingestion`, `mdrag.retrieval`, `mdrag.query`, `mdrag.dependencies`, `mdrag.server` re-export from new paths.
+- **Entry point**: `uv run python -m mdrag.validate_config` for config validation.
+
 ### 2026-02-09 - vLLM Auto-Start with Docker Compose
 
 - **Default integration**: Modified `docker-compose.yml` to include vLLM services via `include` directive

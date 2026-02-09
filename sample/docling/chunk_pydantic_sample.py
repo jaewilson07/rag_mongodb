@@ -15,7 +15,7 @@ from pathlib import Path
 
 from mdrag.ingestion.docling.chunker import ChunkingConfig, create_chunker
 from mdrag.ingestion.docling.processor import DoclingProcessor
-from mdrag.ingestion.models import IngestionDocument, UploadCollectionRequest
+from mdrag.ingestion.models import IngestionDocument, Namespace, UploadCollectionRequest
 from mdrag.ingestion.sources.upload_source import UploadCollector
 from mdrag.settings import load_settings
 
@@ -80,6 +80,7 @@ async def build_subset_document(file_path: Path) -> IngestionDocument:
         filename=file_path.name,
         content=subset_markdown,
         mime_type="text/markdown",
+        namespace=Namespace(),
     )
     sources = await collector.collect(request)
     if not sources:

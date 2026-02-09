@@ -1,6 +1,19 @@
-"""Local LLM serving with vLLM for dual GPU orchestration."""
+"""Backward compatibility: re-export from mdrag.integrations.llm."""
 
-from .vllm_config import VLLMConfig, GPUAllocation
-from .vllm_client import VLLMClient
+from mdrag.integrations.llm import (
+    GPUAllocation,
+    VLLMClient,
+    VLLMConfig,
+)
+from mdrag.integrations.llm.completion_client import (
+    LLMCompletionClient,
+    get_llm_init_kwargs,
+)
 
-__all__ = ["VLLMConfig", "GPUAllocation", "VLLMClient"]
+__all__ = [
+    "GPUAllocation",
+    "LLMCompletionClient",
+    "VLLMClient",
+    "VLLMConfig",
+    "get_llm_init_kwargs",
+]

@@ -1,7 +1,7 @@
-"""MemGPT integration for stateful context management."""
+"""Backward compatibility: redirect to mdrag.integrations.memgpt."""
 
-from .wrapper import MemGPTWrapper
-from .tools import MemoryTools
-from .context_manager import ContextManager
+import sys
 
-__all__ = ["MemGPTWrapper", "MemoryTools", "ContextManager"]
+from mdrag.integrations import memgpt as _memgpt
+
+sys.modules["mdrag.memgpt_integration"] = _memgpt

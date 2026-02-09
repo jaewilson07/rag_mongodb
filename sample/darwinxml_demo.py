@@ -36,6 +36,7 @@ async def create_sample_chunk(
 ) -> DoclingChunks:
     """Create a sample DoclingChunk for demonstration."""
     passport = MetadataPassport(
+        document_uid="demo-doc-uid-123",
         source_type="upload",
         source_url=f"file:///demo/{title}.md",
         document_title=title,
@@ -101,7 +102,7 @@ This is marked as a verified estimate from local vendors.
     # Wrap chunk
     darwin_doc = wrapper.wrap_chunk(
         chunk=chunk,
-        document_id="doc_123",
+        document_uid="doc_123",
         validation_status=ValidationStatus.UNVALIDATED,
         additional_tags=["trip", "planning"],
     )
@@ -158,7 +159,7 @@ async def demo_validation():
 
     # Create wrapper and wrap
     wrapper = DarwinXMLWrapper()
-    darwin_doc = wrapper.wrap_chunk(chunk=chunk, document_id="test_doc")
+    darwin_doc = wrapper.wrap_chunk(chunk=chunk, document_uid="test_doc")
 
     # Validate (basic mode)
     result = validate_darwin_document(darwin_doc, strict=False)
@@ -230,7 +231,7 @@ async def demo_graph_triples():
     wrapper = DarwinXMLWrapper(enable_entity_extraction=True)
     darwin_docs = wrapper.wrap_chunks_batch(
         chunks=chunks,
-        document_id="main_doc",
+        document_uid="main_doc",
         additional_tags=["automotive", "maintenance"],
     )
 
@@ -249,10 +250,10 @@ async def demo_graph_triples():
         await logger.info(
             "graph_triple",
             action="graph_triple",
-            subject=triple["subject"],
-            predicate=triple["predicate"],
-            object=triple["object"],
-            properties=triple.get("properties", {}),
+            subject=triple.subject,
+            predicate=triple.predicate,
+            obj=triple.object,
+            properties=triple.properties,
         )
 
     return triples
@@ -271,7 +272,7 @@ async def demo_xml_export():
 
     # Wrap and export to XML
     wrapper = DarwinXMLWrapper()
-    darwin_doc = wrapper.wrap_chunk(chunk=chunk, document_id="xml_demo")
+    darwin_doc = wrapper.wrap_chunk(chunk=chunk, document_uid="xml_demo")
 
     # Export to XML string
     xml_string = darwin_doc.to_xml()
@@ -308,7 +309,7 @@ async def demo_batch_validation():
     wrapper = DarwinXMLWrapper()
     darwin_docs = wrapper.wrap_chunks_batch(
         chunks=chunks,
-        document_id="batch_demo",
+        document_uid="batch_demo",
     )
 
     # Validate batch
@@ -332,7 +333,7 @@ async def demo_batch_validation():
         await logger.info(
             "batch_validation_result",
             action="batch_validation_result",
-            document_id=doc_id,
+            document_uid=doc_id,
             is_valid=result.is_valid,
             error_count=len(result.errors),
         )
@@ -345,9 +346,8 @@ async def main():
     await setup_logging(log_level="INFO")
 
     await logger.info(
-        "darwinxml_demo_start",
+        "Starting DarwinXML demonstration",
         action="darwinxml_demo_start",
-        message="Starting DarwinXML demonstration",
     )
 
     # Run demonstrations
@@ -381,9 +381,8 @@ async def main():
     print()
 
     await logger.info(
-        "darwinxml_demo_complete",
+        "All demonstrations completed successfully",
         action="darwinxml_demo_complete",
-        message="All demonstrations completed successfully",
     )
 
     print("=" * 60)

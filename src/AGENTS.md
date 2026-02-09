@@ -1,102 +1,140 @@
 # Core Runtime (src) - Agent Guide
 
+## Package Identity
+
+Package `mdrag` maps to `src/`. Agentic RAG system with MongoDB Atlas Vector Search, capability-based ingestion, and multiple interfaces (CLI, FastAPI, MCP).
+
 ## Technical Stack
-- Framework: Pydantic AI 0.1.x
-- Language: Python 3.10+
-- Key Dependencies:
-  - PyMongo 4.10+ - async MongoDB client
-  - OpenAI SDK - embeddings
-  - Rich 13.9+ - CLI rendering
 
-## Architecture & Patterns
+- **Framework**: Pydantic AI 0.1.x, LangGraph 0.2+
+- **Language**: Python 3.10+
+- **Key Dependencies**: PyMongo 4.10+, Motor, OpenAI SDK, Docling 2.14+, Rich 13.9+
 
-### File Organization
-- agent.py - Pydantic AI agent + search tool
-- tools.py - semantic/text/hybrid search pipelines
-- dependencies.py - MongoDB + embedding clients
-- settings.py - Pydantic Settings config
-- providers.py - LLM/embedding model provider setup
-- prompts.py - system prompts
-- cli.py - streaming CLI
+## Architecture
 
-### Folder Map (src)
+### Layered Structure (Code as Source)
 
 ```mermaid
 flowchart TB
-  src_root[src/]
-  src_root --> agent_py[agent.py]
-  src_root --> tools_py[tools.py]
-  src_root --> dependencies_py[dependencies.py]
-  src_root --> settings_py[settings.py]
-  src_root --> providers_py[providers.py]
-  src_root --> prompts_py[prompts.py]
-  src_root --> cli_py[cli.py]
-  src_root --> ingestion[src/ingestion/]
-  src_root --> integrations[src/integrations/]
-  src_root --> retrieval[src/retrieval/]
-  src_root --> server[src/server/]
-  src_root --> logging[src/logging/]
-  src_root --> observability[src/observability/ - LangSmith tracing]
-  src_root --> logging_config[logging_config.py]
-  src_root --> query_py[query.py]
-  src_root --> test_config_py[test_config.py]
+    subgraph core [core/]
+        logging[logging.py]
+        telemetry[telemetry.py]
+        validation[validation.py]
+        exceptions[exceptions.py]
+    end
+
+    subgraph config [config/]
+        settings[settings.py]
+        validate_config[validate_config.py]
+    end
+
+    subgraph integrations [integrations/]
+        mongodb[mongodb/adapters]
+        neo4j[neo4j/]
+        llm[llm/]
+        memgpt[memgpt/]
+        crawl4ai[crawl4ai/]
+        google_drive[google_drive/]
+        searxng[searxng/]
+        youtube[youtube/]
+    end
+
+    subgraph capabilities [capabilities/]
+        ingestion[ingestion/]
+        retrieval[retrieval/]
+        query[query/]
+        memory[memory/]
+    end
+
+    subgraph workflows [workflows/]
+        rag[rag/]
+        wiki[wiki/]
+        readings[readings/]
+    end
+
+    subgraph interfaces [interfaces/]
+        api[api/]
+    end
+
+    core --> config
+    core --> integrations
+    core --> capabilities
+    integrations --> capabilities
+    capabilities --> workflows
+    workflows --> interfaces
 ```
 
-**Folder responsibilities**
-- ingestion/ - document conversion, chunking, embeddings, ingestion pipeline.
-- integrations/ - external service clients (Crawl4AI, Google Drive/Docs, SearXNG).
-- retrieval/ - vector store + embeddings utilities for retrieval flows.
-- server/ - FastAPI app and API wiring.
-- logging/ - structured logging helpers and context utilities.
-- observability/ - PII handling + tracing utilities (LangSmith).
+### Root-Level RAG Files (Legacy/Active)
 
-### Code Examples
+- `agent.py` - Pydantic AI agent + search tools
+- `tools.py` - semantic, text, hybrid search; `SearchResult`, `WebSearchResult`, `HasDeps`
+- `prompts.py` - system prompts
+- `cli.py` - streaming CLI
+- `dependencies.py` - re-exports `AgentDependencies` from `workflows/rag/dependencies.py`
 
-✅ DO: Initialize and ping MongoDB in AgentDependencies
-- Example in src/dependencies.py (initialize): await self.mongo_client.admin.command("ping")
+### Key Classes (from code)
 
-❌ DON'T: Skip document metadata join in search pipelines
-- Anti-pattern: returning chunks without $lookup to documents
-❌ DON'T: Recreate AgentDependencies per tool call
-- Anti-pattern: building new clients instead of reusing `StateDeps` in src/agent.py
+| Class | Location | Purpose |
+|-------|----------|---------|
+| `AgentDependencies` | `workflows/rag/dependencies.py` | MongoDB, EmbeddingClient, LLM; injected into agent |
+| `ManagedDependencies` | `interfaces/api/dependencies.py` | FastAPI lifecycle wrapper for AgentDependencies |
+| `MDRAGException` | `core/exceptions.py` | Project-wide base exception |
+| `ValidationError` | `core/validation.py` | MongoDB, Redis, embedding, etc. validation |
+| `StorageAdapter` | `capabilities/ingestion/protocols.py` | Protocol; `MongoStorageAdapter` in integrations |
 
-### Domain Dictionary
-- Document: source record stored in documents collection
-- Chunk: searchable unit in chunks collection with embedding
-- Hybrid search: RRF merge of vector + text searches
+## JIT Index (Sub-AGENTS.md)
 
-## Service Composition
-- Not used in this component.
+| Directory | AGENTS.md |
+|-----------|-----------|
+| `core/` | [core/AGENTS.md](core/AGENTS.md) |
+| `config/` | [config/AGENTS.md](config/AGENTS.md) |
+| `integrations/` | [integrations/AGENTS.md](integrations/AGENTS.md) |
+| `capabilities/ingestion/` | [capabilities/ingestion/AGENTS.md](capabilities/ingestion/AGENTS.md) |
+| `capabilities/retrieval/` | [capabilities/retrieval/AGENTS.md](capabilities/retrieval/AGENTS.md) |
+| `capabilities/query/` | [capabilities/query/AGENTS.md](capabilities/query/AGENTS.md) |
+| `capabilities/memory/` | [capabilities/memory/AGENTS.md](capabilities/memory/AGENTS.md) |
+| `workflows/` | [workflows/AGENTS.md](workflows/AGENTS.md) |
+| `interfaces/api/` | [interfaces/api/AGENTS.md](interfaces/api/AGENTS.md) |
 
-## Key Files & JIT Search
+## Import Paths (Canonical)
 
-### Touch Points
-- Agent tool: src/agent.py
-- Search pipelines: src/tools.py
-- Configuration: src/settings.py
+| Use | Import |
+|-----|--------|
+| Settings | `mdrag.settings` or `mdrag.config.settings` |
+| Validation | `mdrag.validation` or `mdrag.core.validation` |
+| Agent deps | `mdrag.dependencies` (re-exports `workflows.rag.dependencies`) |
+| Ingestion | `mdrag.ingestion` (redirects to `capabilities.ingestion`) |
+| Query | `mdrag.query` (redirects to `capabilities.query`) |
+| Retrieval | `mdrag.retrieval` (redirects to `capabilities.retrieval`) |
+| Storage adapter | `mdrag.integrations.mongodb.adapters.storage.MongoStorageAdapter` |
 
-### Search Commands
-- /bin/grep -R "def search_knowledge_base" -n src
-- /bin/grep -R "class SearchResult" -n src
+## Commands
 
-## Testing & Validation
+```bash
+# Validate config (MongoDB connection)
+uv run python -m mdrag.config.validate_config
 
-### Test Command
-- uv run python -m src.test_config
+# Ingest documents
+uv run python -m mdrag.ingestion.ingest -d ./documents
 
-### Test Strategy
-- Unit: Validate settings, tool outputs formatting
-- Integration: Run CLI with live MongoDB + embeddings
+# Run CLI
+uv run python -m mdrag.cli
 
-### Test Locations
-- sample/ (integration and E2E checks)
-- tests/ (pytest checks)
+# Run API
+uv run uvicorn mdrag.interfaces.api.main:app
+```
+
+## Patterns & Conventions
+
+- **DO**: Use `AgentDependencies` via `StateDeps` / `RAGState`; avoid per-call client creation.
+- **DO**: Return `Source` with `SourceFrontmatter` from integrations.
+- **DON'T**: Pass raw markdown into `HybridChunker`; use `DoclingDocument`.
+- **DON'T**: Store embeddings as strings; use `list[float]` for MongoDB.
+- **DON'T**: Skip `$lookup` for document metadata in search pipelines.
 
 ## Component Gotchas
 
-1. Use async I/O for MongoDB and OpenAI calls.
-2. Tool functions should return strings for LLM consumption.
-3. Match count must respect settings.max_match_count.
-4. Manual RRF is in src/tools.py; do not assume $rankFusion.
-5. Reuse `AgentDependencies` via `StateDeps`; avoid per-call client creation.
-6. Integration exports must return `Source` with `SourceFrontmatter` (see src/integrations/models.py).
+1. Hybrid search uses manual RRF in `tools.py` (not `$rankFusion`).
+2. `validate_mongodb(settings, strict=False)` for ingestion; `strict=True` for query/CLI/server.
+3. Ingestion validation: `validate_ingestion()` at pipeline entry; collector-specific checks (Playwright, credentials).
+4. Use `mdrag.validation` for startup checks; layer-specific validators live in their modules.

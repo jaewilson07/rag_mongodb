@@ -1,13 +1,7 @@
-"""Retrieval and embedding utilities for search/query layers."""
+"""Backward compatibility: redirect to mdrag.capabilities.retrieval."""
 
-from mdrag.retrieval.embeddings import EmbeddingClient
-from mdrag.retrieval.formatting import build_citations, build_prompt, format_search_results
-from mdrag.retrieval.vector_store import VectorStore
+import sys
 
-__all__ = [
-    "EmbeddingClient",
-    "VectorStore",
-    "build_citations",
-    "build_prompt",
-    "format_search_results",
-]
+from mdrag.capabilities import retrieval as _retrieval
+
+sys.modules["mdrag.retrieval"] = _retrieval
