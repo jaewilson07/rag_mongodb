@@ -5,19 +5,14 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid as uuid_lib
 
-from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession
+from neo4j import AsyncGraphDatabase, AsyncDriver
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
 from src.settings import Settings
 from .models import (
     GraphNode,
     Project,
-    Area,
     Decision,
-    Requirement,
-    CodeEntity,
-    Resource,
-    Relationship,
     GraphQuery,
     GraphQueryResult,
     NodeType,

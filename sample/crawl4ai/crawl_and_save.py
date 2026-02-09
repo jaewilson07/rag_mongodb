@@ -30,11 +30,12 @@ from utils import (
     check_mongodb,
     check_playwright,
     check_redis,
+    check_rq_workers,
     check_searxng,
     print_pre_flight_results,
 )
 
-DEFAULT_URL = "https://example.com"
+DEFAULT_URL = "https://www.reddit.com/r/StableDiffusion/comments/10obl7f/deep_dive_on_image_captioning/"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -58,6 +59,7 @@ async def _run() -> None:
     checks = {
         "MongoDB": await check_mongodb(settings),
         "Redis": await check_redis(redis_url),
+        "RQ Workers": check_rq_workers(redis_url),
         "SearXNG": await check_searxng(searxng_url),
         "Playwright": check_playwright(),
         "API Keys": check_api_keys(settings, require_llm=True, require_embedding=False),
@@ -66,9 +68,10 @@ async def _run() -> None:
     if not print_pre_flight_results(checks):
         print("\n   Setup instructions:")
         print("   1. Start services: docker-compose up -d redis searxng")
-        print("   2. Install Playwright: playwright install")
-        print("   3. Set LLM_API_KEY in .env")
-        return
+        print("   2. Start RQ worker: uv run rq worker default --url redis://localhost:6379/0")
+        print("   3. Install Playwright: playwright install")
+        print("   4. Set LLM_API_KEY in .env")
+        sys.exit(1)
 
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
 

@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from bson import ObjectId
-from pymongo import AsyncMongoClient
-
 from mdrag.settings import Settings
+from pymongo import AsyncMongoClient
 
 
 @dataclass
@@ -21,7 +20,7 @@ class VectorStore:
     async def initialize(self) -> None:
         if not self.mongo_client:
             self.mongo_client = AsyncMongoClient(
-                self.settings.mongodb_uri,
+                self.settings.mongodb_connection_string,
                 serverSelectionTimeoutMS=5000,
             )
 
@@ -78,9 +77,8 @@ class VectorStore:
         if not chunk:
             return None
 
-        page_number = (
-            chunk.get("page_number")
-            or (chunk.get("metadata") or {}).get("page_number")
+        page_number = chunk.get("page_number") or (chunk.get("metadata") or {}).get(
+            "page_number"
         )
         document = await documents.find_one({"_id": chunk.get("document_id")})
         if not document:

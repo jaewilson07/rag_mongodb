@@ -1,0 +1,41 @@
+---
+description: Delegate coding tasks to Claude Code CLI (local vLLM/GLM-4.7)
+alwaysApply: true
+---
+
+# Claude CLI Delegation
+
+When the user asks to delegate tasks to Claude Code or run commands via the Claude CLI:
+
+## Delegation Pattern
+
+1. **Ensure vLLM is running** (if using local model):
+   ```bash
+   docker compose -f docker-compose.vllm.yml up -d
+   # Wait ~2-5 min for model load, then verify:
+   curl -s http://localhost:11435/health
+   ```
+
+2. **Run Claude Code with local vLLM**:
+   ```bash
+   source run_claude_local.sh
+   # Or interactively:
+   ./run_claude_local.sh
+   ```
+
+3. **Delegation workflow**: When a task benefits from Claude Code's agentic capabilities (file editing, command execution, multi-step reasoning):
+   - Suggest: "I can delegate this to Claude Code (GLM-4.7 via vLLM). Run: `./run_claude_local.sh` and ask: [concise task description]"
+   - Or run the delegation yourself via terminal: `./run_claude_local.sh -p "User's task here"` (if Claude CLI supports -p)
+
+## Key Paths
+
+- `run_claude_local.sh` - Wrapper that configures env and launches `claude`
+- `scripts/test_vllm_prompt.sh` - Test vLLM directly (OpenAI-compatible API)
+- `docker-compose.vllm.yml` - vLLM + GLM-4.7-Flash-AWQ-4bit on 2x 3090
+
+## When to Delegate
+
+- Multi-file refactors
+- Exploratory coding with shell commands
+- Tasks requiring tool calling (Claude Code tools)
+- User explicitly requests Claude CLI

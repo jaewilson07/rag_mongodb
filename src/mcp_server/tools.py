@@ -1,8 +1,7 @@
 """MCP tools for Cursor IDE integration."""
 
 import logging
-from typing import Optional, List, Dict, Any
-import json
+from typing import Optional, Any
 
 from src.memory_gateway.gateway import MemoryGateway
 from src.memory_gateway.models import ArchitecturalQuery

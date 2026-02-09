@@ -5,18 +5,26 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-from pymongo import AsyncMongoClient
-from pymongo.errors import ConnectionFailure, DocumentTooLarge, ServerSelectionTimeoutError
+from typing import Any, Optional
 
 from mdrag.ingestion.docling.chunker import DoclingChunks
 from mdrag.ingestion.docling.darwinxml_models import DarwinXMLDocument
 from mdrag.ingestion.docling.darwinxml_storage import DarwinXMLStorage
-from mdrag.ingestion.models import IngestionConfig, IngestionDocument, StorageRepresentations, StorageResult
+from mdrag.ingestion.models import (
+    IngestionConfig,
+    IngestionDocument,
+    StorageRepresentations,
+    StorageResult,
+)
 from mdrag.ingestion.protocols import StorageAdapter
 from mdrag.mdrag_logging.service_logging import get_logger
 from mdrag.settings import Settings
+from pymongo import AsyncMongoClient
+from pymongo.errors import (
+    ConnectionFailure,
+    DocumentTooLarge,
+    ServerSelectionTimeoutError,
+)
 
 logger = get_logger(__name__)
 
@@ -59,7 +67,7 @@ class MongoStorageAdapter(StorageAdapter):
         try:
             if not self.mongo_client:
                 self.mongo_client = AsyncMongoClient(
-                    self.settings.mongodb_uri,
+                    self.settings.mongodb_connection_string,
                     serverSelectionTimeoutMS=5000,
                 )
             self.db = self.mongo_client[self.settings.mongodb_database]
@@ -146,9 +154,7 @@ class MongoStorageAdapter(StorageAdapter):
             "source_id": identity.source_id,
             "source_mime_type": identity.source_mime_type,
             "content": document.content,
-            "frontmatter": document.metadata.frontmatter.model_dump(
-                exclude_none=True
-            ),
+            "frontmatter": document.metadata.frontmatter.model_dump(exclude_none=True),
             "namespace": namespace,
             "ingestion_metadata": {
                 "identity": identity.model_dump(),
@@ -236,9 +242,7 @@ class MongoStorageAdapter(StorageAdapter):
                     "chunk_index": chunk.index,
                     "metadata": chunk_metadata,
                     "passport": chunk.passport.model_dump(exclude_none=True),
-                    "frontmatter": chunk.frontmatter.model_dump(
-                        exclude_none=True
-                    ),
+                    "frontmatter": chunk.frontmatter.model_dump(exclude_none=True),
                     "token_count": chunk.token_count,
                     "summary_context": chunk_metadata.get("summary_context"),
                     "source_url": chunk.passport.source_url,

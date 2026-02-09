@@ -50,8 +50,8 @@ async def _run() -> None:
     }
     
     if not print_pre_flight_results(checks):
-        return
-    
+        sys.exit(1)
+
     workflow = IngestionWorkflow(config=IngestionConfig())
     await workflow.initialize()
     try:

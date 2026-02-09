@@ -227,7 +227,7 @@ def main() -> None:
             print("\n   Setup instructions:")
             print("   1. Start SearXNG: docker-compose up -d searxng")
             print(f"   2. Verify at: {args.searxng_url}")
-            return
+            sys.exit(1)
 
         await _run_export(
             query=args.query,

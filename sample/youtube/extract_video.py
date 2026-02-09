@@ -102,7 +102,7 @@ async def _run() -> None:
 
     if data.description:
         preview = data.description[:300]
-        print(f"\nDescription Preview:")
+        print("\nDescription Preview:")
         print("-" * 60)
         print(preview)
         if len(data.description) > 300:

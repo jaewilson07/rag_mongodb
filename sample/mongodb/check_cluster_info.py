@@ -1,13 +1,14 @@
 """Check MongoDB cluster information and capabilities."""
 
 import asyncio
+
 from mdrag.settings import load_settings
 from pymongo import AsyncMongoClient
 
 
 async def main():
     settings = load_settings()
-    client = AsyncMongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+    client = AsyncMongoClient(settings.mongodb_connection_string, serverSelectionTimeoutMS=5000)
 
     try:
         info = await client.admin.command("buildInfo")

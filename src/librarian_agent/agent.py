@@ -2,10 +2,10 @@
 
 import logging
 from typing import TypedDict, Annotated, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
 from src.settings import Settings
@@ -54,12 +54,13 @@ class LibrarianAgent:
         self.gateway = memory_gateway
         self.distiller = KnowledgeDistiller(settings, memory_gateway)
         
-        # Initialize LLM for extraction
+        # Initialize LLM for extraction (provider decides temperature)
+        from mdrag.llm.completion_client import get_llm_init_kwargs
         self.llm = ChatOpenAI(
             model=settings.llm_model,
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
-            temperature=0.1,  # Low temperature for consistent extraction
+            **get_llm_init_kwargs(settings),
         )
         
         # Build the graph

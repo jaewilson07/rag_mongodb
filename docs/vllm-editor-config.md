@@ -2,7 +2,7 @@
 
 ## Overview
 
-This configuration enables VS Code and Cursor to use your local vLLM instance (Qwen2.5-Coder-14B) running on `localhost:8000`.
+This configuration enables VS Code and Cursor to use your local vLLM instance (Qwen2.5-Coder-14B) running on `localhost:11435` (Ollama 11434 + 1).
 
 ## Files Updated
 
@@ -15,7 +15,7 @@ This configuration enables VS Code and Cursor to use your local vLLM instance (Q
       "provider": "openai",
       "model": "qwen-coder",
       "apiKey": "secret-token",
-      "apiBase": "http://localhost:8000/v1"
+      "apiBase": "http://localhost:11435/v1"
     }
   ],
   "continue.tabAutocompleteModel": {
@@ -23,7 +23,7 @@ This configuration enables VS Code and Cursor to use your local vLLM instance (Q
     "provider": "openai",
     "model": "qwen-coder",
     "apiKey": "secret-token",
-    "apiBase": "http://localhost:8000/v1"
+    "apiBase": "http://localhost:11435/v1"
   }
 }
 ```
@@ -85,7 +85,7 @@ code .
 
 ### Test vLLM Endpoint Directly
 ```bash
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Authorization: Bearer secret-token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -112,7 +112,7 @@ curl http://localhost:8000/v1/chat/completions \
 ### Issue: Extension can't connect to vLLM
 ```bash
 # Check vLLM is running
-curl http://localhost:8000/health
+curl http://localhost:11435/health
 
 # Check vLLM logs
 docker logs vllm-qwen-coder --tail 50

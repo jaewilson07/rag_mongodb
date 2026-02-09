@@ -13,8 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from uuid import uuid4
 
 from mdrag.ingestion.docling.chunker import DoclingChunks
@@ -490,8 +489,6 @@ class DarwinXMLWrapper:
         A parent is a previous chunk with a shorter heading path,
         indicating a higher-level section.
         """
-        current_depth = len(chunk.passport.heading_path)
-
         # Search backwards for a chunk with shorter heading path
         for idx in range(chunk.index - 1, -1, -1):
             if idx in chunk_id_map:

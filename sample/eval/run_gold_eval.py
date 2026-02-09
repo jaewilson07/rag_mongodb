@@ -37,8 +37,8 @@ async def run_eval():
     }
     
     if not print_pre_flight_results(checks):
-        return
-    
+        sys.exit(1)
+
     data = load_dataset()
 
     state = RAGState()

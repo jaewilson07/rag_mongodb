@@ -12,8 +12,6 @@ from src.memory_gateway.models import (
     ArchitecturalQuery,
 )
 from src.integrations.neo4j.models import (
-    Project,
-    Area,
     Decision,
     Requirement,
     CodeEntity,

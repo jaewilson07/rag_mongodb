@@ -139,7 +139,7 @@ def main() -> None:
         print("\n   Setup instructions:")
         print("   1. Install Playwright: playwright install")
         print("   2. Optional: playwright install-deps (Linux system dependencies)")
-        return
+        sys.exit(1)
 
     sample_dir = Path(__file__).resolve().parent
     output_dir = (

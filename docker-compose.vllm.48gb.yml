@@ -1,0 +1,21 @@
+# Override for 48GB VRAM (2x 3090): use quantized model instead of base
+# Base zai-org/GLM-4.7-Flash (~60GB) won't fit; use AWQ 4-bit (~15GB)
+# Usage: docker compose -f docker-compose.vllm.yml -f docker-compose.vllm.48gb.yml up -d
+name: vllm-inference
+
+services:
+  vllm-glm:
+    command: >
+      --model cyankiwi/GLM-4.7-Flash-AWQ-4bit
+      --tensor-parallel-size 2
+      --gpu-memory-utilization 0.90
+      --max-model-len 32768
+      --trust-remote-code
+      --dtype auto
+      --served-model-name glm-4.7
+      --host 0.0.0.0
+      --port 8000
+      --enable-auto-tool-choice
+      --tool-call-parser glm47
+      --reasoning-parser glm45
+      --quantization compressed-tensors

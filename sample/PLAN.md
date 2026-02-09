@@ -313,7 +313,7 @@ A sample is considered "working" when:
 
 - **[AGENTS.md](../AGENTS.md)**: Project behavioral protocols
 - **[CLAUDE.md](../CLAUDE.md)**: Development instructions
-- **[docs/design_patterns.md](../docs/design_patterns.md)**: Architecture patterns
+- **[docs/design-patterns/](../docs/design-patterns/)**: Architecture patterns
 
 ---
 

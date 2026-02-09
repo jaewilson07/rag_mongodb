@@ -1,7 +1,6 @@
 """Initialize MongoDB Atlas Search indexes - simplified version."""
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -139,7 +138,7 @@ async def main():
 
     try:
         # Connect to MongoDB
-        print(f"\n1. Connecting to MongoDB...")
+        print("\n1. Connecting to MongoDB...")
         print(
             f"   URI: {settings.mongodb_uri.split('@')[1] if '@' in settings.mongodb_uri else settings.mongodb_uri}"
         )

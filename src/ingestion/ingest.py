@@ -43,11 +43,15 @@ from mdrag.ingestion.models import (
     WebCollectionRequest,
 )
 from mdrag.ingestion.protocols import SourceCollector
+import sys
+
 from mdrag.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
 from mdrag.ingestion.storage import MongoStorageAdapter
 from mdrag.integrations.google_drive import parse_csv_values
 from mdrag.mdrag_logging.service_logging import get_logger, log_async, setup_logging
 from mdrag.settings import Settings, load_settings
+from mdrag.validation import ValidationError
+from mdrag.ingestion.validation import validate_ingestion
 
 load_dotenv()
 
@@ -143,6 +147,12 @@ class IngestionWorkflow:
     ) -> list[IngestionResult]:
         """Ingest sources from a collector request."""
         collector_name = getattr(collector, "name", collector.__class__.__name__)
+        await validate_ingestion(
+            self.settings,
+            collectors=[collector_name],
+            strict_mongodb=False,
+            require_redis=False,
+        )
         await logger.info(
             "ingestion_collect_start",
             action="ingestion_collect_start",
@@ -481,6 +491,26 @@ async def main() -> None:
     drive_folder_ids = parse_csv_values(args.drive_folder_ids) or []
     drive_file_ids = parse_csv_values(args.drive_file_ids) or []
     drive_doc_ids = parse_csv_values(args.drive_doc_ids) or []
+
+    # Pre-flight: validate core + collectors for requested sources
+    collectors: list[str] = ["upload"]
+    if crawl_urls:
+        collectors.append("crawl4ai")
+    if drive_folder_ids or drive_file_ids or drive_doc_ids:
+        collectors.append("gdrive")
+    collectors = list(dict.fromkeys(collectors))
+
+    try:
+        await validate_ingestion(
+            workflow.settings,
+            collectors=collectors,
+            strict_mongodb=False,
+            require_redis=False,
+        )
+    except ValidationError as e:
+        await logger.error("ingestion_validation_failed", error=str(e))
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
 
     def progress_callback(current: int, total: int) -> None:
         log_async(

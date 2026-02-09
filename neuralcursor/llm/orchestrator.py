@@ -5,7 +5,6 @@ GPU 0: High-parameter Reasoning LLM (DeepSeek-Coder-33B)
 GPU 1: Embedding & RAG tasks (BGE-M3)
 """
 
-import asyncio
 import logging
 from typing import Any, Optional
 

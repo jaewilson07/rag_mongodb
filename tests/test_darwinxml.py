@@ -5,8 +5,6 @@ Tests the DarwinXML models, wrapper, validator, and storage without requiring
 full environment setup.
 """
 
-from datetime import datetime
-from typing import List
 
 # Import DarwinXML components
 import sys

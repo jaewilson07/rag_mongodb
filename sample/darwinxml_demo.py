@@ -10,12 +10,10 @@ Shows how to:
 """
 
 import asyncio
-from pathlib import Path
 from typing import List
 
-from mdrag.ingestion.docling.chunker import ChunkingConfig, DoclingChunks, create_chunker
+from mdrag.ingestion.docling.chunker import DoclingChunks
 from mdrag.ingestion.docling.darwinxml_models import (
-    DarwinXMLDocument,
     ValidationStatus,
 )
 from mdrag.ingestion.docling.darwinxml_validator import (
@@ -359,27 +357,27 @@ async def main():
 
     print("1. Basic Wrapping")
     print("-" * 60)
-    darwin_doc = await demo_basic_wrapping()
+    _ = await demo_basic_wrapping()
     print()
 
     print("2. Validation")
     print("-" * 60)
-    validation_result = await demo_validation()
+    _ = await demo_validation()
     print()
 
     print("3. Graph Triple Extraction")
     print("-" * 60)
-    triples = await demo_graph_triples()
+    _ = await demo_graph_triples()
     print()
 
     print("4. XML Export")
     print("-" * 60)
-    xml_string = await demo_xml_export()
+    _ = await demo_xml_export()
     print()
 
     print("5. Batch Validation")
     print("-" * 60)
-    batch_results = await demo_batch_validation()
+    _ = await demo_batch_validation()
     print()
 
     await logger.info(

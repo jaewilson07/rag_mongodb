@@ -470,7 +470,7 @@ if __name__ == "__main__":
 
 - **[AGENTS.md](../AGENTS.md)**: Agent behavioral protocols and development guidelines
 - **[CLAUDE.md](../CLAUDE.md)**: Development instructions and common pitfalls
-- **[docs/design_patterns.md](../docs/design_patterns.md)**: Architecture patterns and best practices
+- **[docs/design-patterns/](../docs/design-patterns/)**: Architecture patterns and best practices
 - **[sample/AGENTS.md](AGENTS.md)**: Sample-specific patterns and conventions
 
 ## Support

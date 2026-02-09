@@ -98,7 +98,7 @@ async def main():
 
     if not print_pre_flight_results(checks):
         print("Resolve the issues above before running this sample.")
-        return
+        sys.exit(1)
 
     try:
         # Test connection

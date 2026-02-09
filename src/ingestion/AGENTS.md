@@ -24,6 +24,7 @@
 flowchart TB
   ingestion_root[src/ingestion/]
   ingestion_root --> ingest_py[ingest.py]
+  ingestion_root --> validation_py[validation.py]
   ingestion_root --> protocols_py[protocols.py]
   ingestion_root --> storage_py[storage.py]
   ingestion_root --> embedder_py[embedder.py]
@@ -108,7 +109,39 @@ flowchart LR
 - /bin/grep -R "class DoclingHierarchicalChunker" -n src/ingestion
 - /bin/grep -R "class MongoStorageAdapter" -n src/ingestion
 
+## Pre-Ingest Validation
+
+Validation is attached to the ingestion pipeline and runs before any collect/store. See [docs/design-patterns/ingestion-validation.md](../../docs/design-patterns/ingestion-validation.md) for full architecture and validation matrix.
+
+### Core Checks (always)
+- MongoDB connection (strict=False for ingestion; collections may not exist yet)
+- Embedding API (single test request)
+- Redis + RQ workers (when `require_redis=True`, e.g. crawl_and_save, ReadingsService, API ingest). At least one worker must be listening to `default` queue.
+
+### Collector-Specific Checks
+
+| Collector | Extra Checks |
+|-----------|--------------|
+| crawl4ai | Playwright installed |
+| gdrive | Google credentials (service account file or GDOC_CLIENT/GDOC_TOKEN) |
+| upload | None |
+
+### Where Validation Runs
+
+- **IngestionWorkflow.ingest_collector()**: Before `collector.collect()`; validates core + collector
+- **ingest CLI main()**: Before processing; validates core + all requested collectors
+- **IngestionService.run_job()**: After workflow.initialize(); validates core + collector for source_type
+- **ReadingsService.save_reading()**: After initialize(); validates via `validate_readings(url_type, searxng_url)` — MongoDB, Redis, LLM API, plus Playwright/SearXNG (web) or yt-dlp/youtube-transcript-api (YouTube)
+
+### validate_readings (ReadingsService)
+
+For `save_reading`, validation depends on URL type:
+- **web**: Playwright, SearXNG
+- **youtube**: yt-dlp, youtube-transcript-api
+
 ## Testing & Validation
+
+Design details: [docs/design-patterns/ingestion-validation.md](../../docs/design-patterns/ingestion-validation.md)
 
 ### Test Command
 - uv run python -m src.ingestion.ingest -d ./documents

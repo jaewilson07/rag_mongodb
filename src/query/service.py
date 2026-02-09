@@ -8,8 +8,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-import openai
-
 from mdrag.dependencies import AgentDependencies
 from mdrag.observability.pii import redact_payload, redact_text
 from mdrag.observability.tracing import new_trace_id, start_span
@@ -106,20 +104,12 @@ class QueryService:
         await self.deps.cleanup()
 
     async def _generate_answer(self, prompt: str) -> tuple[str, Dict[str, Any]]:
-        settings = self.deps.settings
-        client = openai.AsyncOpenAI(
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
-        )
-        response = await client.chat.completions.create(
-            model=settings.llm_model,
+        response = await self.deps.llm_client.create(
             messages=[
                 {"role": "system", "content": self._system_prompt()},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.2,
         )
-        await client.close()
         usage = getattr(response, "usage", None)
         usage_dict = {
             "prompt_tokens": getattr(usage, "prompt_tokens", None),

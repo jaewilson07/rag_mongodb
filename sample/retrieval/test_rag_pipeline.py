@@ -39,7 +39,7 @@ async def test_rag_pipeline():
     }
     
     if not print_pre_flight_results(checks):
-        return 1
+        sys.exit(1)
 
     deps = AgentDependencies()
     await deps.initialize()

@@ -307,7 +307,7 @@ async def main():
     }
     
     if not print_pre_flight_results(checks):
-        return
+        sys.exit(1)
 
     all_results = {}
 

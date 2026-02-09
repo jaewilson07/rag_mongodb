@@ -5,8 +5,8 @@ Dependency injection for FastAPI gateway.
 import logging
 from typing import AsyncGenerator
 
-from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
 from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
+from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
 from neuralcursor.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ async def init_clients() -> None:
 
     # Initialize MongoDB
     mongodb_config = MongoDBConfig(
-        uri=settings.mongodb_uri,
+        uri=settings.mongodb_connection_string,
         database=settings.mongodb_database,
     )
     _mongodb_client = MongoDBClient(mongodb_config)

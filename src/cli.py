@@ -4,10 +4,7 @@
 import asyncio
 from typing import List
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Prompt
-
+from dotenv import load_dotenv
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
     FunctionToolCallEvent,
@@ -16,12 +13,13 @@ from pydantic_ai.messages import (
     PartStartEvent,
     TextPartDelta,
 )
-from pydantic_ai.ag_ui import StateDeps
-from dotenv import load_dotenv
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
 
 # Import our agent and dependencies
 try:
-    from .agent import rag_agent, RAGState
+    from .agent import RAGState, rag_agent
     from .dependencies import AgentDependencies
     from .logging_config import configure_logging
     from .settings import load_settings
@@ -33,7 +31,7 @@ except ImportError:  # Allow running as a script without module context
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from src.agent import rag_agent, RAGState
+    from src.agent import RAGState, rag_agent
     from src.dependencies import AgentDependencies
     from src.logging_config import configure_logging
     from src.settings import load_settings
@@ -54,9 +52,7 @@ async def ensure_services_ready() -> None:
 
 
 async def stream_agent_interaction(
-    user_input: str,
-    message_history: List,
-    deps: StateDeps[RAGState]
+    user_input: str, message_history: List, deps: RAGState
 ) -> tuple[str, List]:
     """
     Stream agent interaction with real-time tool call display.
@@ -74,14 +70,13 @@ async def stream_agent_interaction(
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         return ("", [])
 
 
 async def _stream_agent(
-    user_input: str,
-    deps: StateDeps[RAGState],
-    message_history: List
+    user_input: str, deps: RAGState, message_history: List
 ) -> tuple[str, List]:
     """Stream the agent execution and return response."""
 
@@ -89,13 +84,9 @@ async def _stream_agent(
 
     # Stream the agent execution with message history
     async with rag_agent.iter(
-        user_input,
-        deps=deps,
-        message_history=message_history
+        user_input, deps=deps, message_history=message_history
     ) as run:
-
         async for node in run:
-
             # Handle user prompt node
             if Agent.is_user_prompt_node(node):
                 pass  # Clean start
@@ -109,14 +100,19 @@ async def _stream_agent(
                 async with node.stream(run.ctx) as request_stream:
                     async for event in request_stream:
                         # Handle text part start events
-                        if isinstance(event, PartStartEvent) and event.part.part_kind == 'text':
+                        if (
+                            isinstance(event, PartStartEvent)
+                            and event.part.part_kind == "text"
+                        ):
                             initial_text = event.part.content
                             if initial_text:
                                 console.print(initial_text, end="")
                                 response_text += initial_text
 
                         # Handle text delta events for streaming
-                        elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                        elif isinstance(event, PartDeltaEvent) and isinstance(
+                            event.delta, TextPartDelta
+                        ):
                             delta_text = event.delta.content_delta
                             if delta_text:
                                 console.print(delta_text, end="")
@@ -135,23 +131,33 @@ async def _stream_agent(
                             tool_name = event.part.tool_name
                             args = event.part.args
 
-                            console.print(f"  [cyan]Calling tool:[/cyan] [bold]{tool_name}[/bold]")
+                            console.print(
+                                f"  [cyan]Calling tool:[/cyan] [bold]{tool_name}[/bold]"
+                            )
 
                             # Show search query if it's a search tool
                             if args and isinstance(args, dict):
-                                if 'query' in args:
-                                    console.print(f"    [dim]Query:[/dim] {args['query']}")
-                                if 'search_type' in args:
-                                    console.print(f"    [dim]Type:[/dim] {args['search_type']}")
-                                if 'match_count' in args:
-                                    console.print(f"    [dim]Results:[/dim] {args['match_count']}")
+                                if "query" in args:
+                                    console.print(
+                                        f"    [dim]Query:[/dim] {args['query']}"
+                                    )
+                                if "search_type" in args:
+                                    console.print(
+                                        f"    [dim]Type:[/dim] {args['search_type']}"
+                                    )
+                                if "match_count" in args:
+                                    console.print(
+                                        f"    [dim]Results:[/dim] {args['match_count']}"
+                                    )
                             elif args:
                                 args_str = str(args)
                                 if len(args_str) > 100:
                                     args_str = args_str[:97] + "..."
                                 console.print(f"    [dim]Args: {args_str}[/dim]")
                         elif isinstance(event, FunctionToolResultEvent):
-                            console.print("  [green]Tool completed successfully[/green]")
+                            console.print(
+                                "  [green]Tool completed successfully[/green]"
+                            )
 
             # Handle end node
             elif Agent.is_end_node(node):
@@ -164,7 +170,9 @@ async def _stream_agent(
     new_messages = run.result.new_messages()
 
     # Get final output
-    final_output = run.result.output if hasattr(run.result, "output") else str(run.result)
+    final_output = (
+        run.result.output if hasattr(run.result, "output") else str(run.result)
+    )
     response = response_text.strip() or final_output
 
     # Return both streamed text and new messages
@@ -181,7 +189,7 @@ def display_welcome():
         f"[dim]LLM: {settings.llm_model}[/dim]\n\n"
         "[dim]Type 'exit' to quit, 'info' for system info, 'clear' to clear screen[/dim]",
         style="blue",
-        padding=(1, 2)
+        padding=(1, 2),
     )
     console.print(welcome)
     console.print()
@@ -207,8 +215,8 @@ async def main():
     # Create the state that the agent will use
     state = RAGState()
 
-    # Create StateDeps wrapper with the state
-    deps = StateDeps[RAGState](state=state)
+    # Use the state directly (no wrapper needed)
+    deps = state
 
     console.print("[bold green]✓[/bold green] Search system initialized\n")
 
@@ -222,24 +230,26 @@ async def main():
                 user_input = Prompt.ask("[bold green]You").strip()
 
                 # Handle special commands
-                if user_input.lower() in ['exit', 'quit', 'q']:
+                if user_input.lower() in ["exit", "quit", "q"]:
                     console.print("\n[yellow]👋 Goodbye![/yellow]")
                     break
 
-                elif user_input.lower() == 'info':
+                elif user_input.lower() == "info":
                     settings = load_settings()
-                    console.print(Panel(
-                        f"[cyan]LLM Provider:[/cyan] {settings.llm_provider}\n"
-                        f"[cyan]LLM Model:[/cyan] {settings.llm_model}\n"
-                        f"[cyan]Embedding Model:[/cyan] {settings.embedding_model}\n"
-                        f"[cyan]Default Match Count:[/cyan] {settings.default_match_count}\n"
-                        f"[cyan]Default Text Weight:[/cyan] {settings.default_text_weight}",
-                        title="System Configuration",
-                        border_style="magenta"
-                    ))
+                    console.print(
+                        Panel(
+                            f"[cyan]LLM Provider:[/cyan] {settings.llm_provider}\n"
+                            f"[cyan]LLM Model:[/cyan] {settings.llm_model}\n"
+                            f"[cyan]Embedding Model:[/cyan] {settings.embedding_model}\n"
+                            f"[cyan]Default Match Count:[/cyan] {settings.default_match_count}\n"
+                            f"[cyan]Default Text Weight:[/cyan] {settings.default_text_weight}",
+                            title="System Configuration",
+                            border_style="magenta",
+                        )
+                    )
                     continue
 
-                elif user_input.lower() == 'clear':
+                elif user_input.lower() == "clear":
                     console.clear()
                     display_welcome()
                     continue
@@ -249,9 +259,7 @@ async def main():
 
                 # Stream the interaction and get response
                 response_text, new_messages = await stream_agent_interaction(
-                    user_input,
-                    message_history,
-                    deps
+                    user_input, message_history, deps
                 )
 
                 # Add new messages to history (includes both user prompt and agent response)
@@ -267,6 +275,7 @@ async def main():
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
                 import traceback
+
                 traceback.print_exc()
                 continue
 

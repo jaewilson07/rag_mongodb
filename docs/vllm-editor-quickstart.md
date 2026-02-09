@@ -38,7 +38,7 @@ In Continue panel:
 
 ```json
 {
-  "endpoint": "http://localhost:8000/v1",
+  "endpoint": "http://localhost:11435/v1",
   "model": "qwen-coder",
   "apiKey": "secret-token",
   "contextLength": 32768,
@@ -50,12 +50,12 @@ In Continue panel:
 
 **Test vLLM is responding:**
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:11435/health
 ```
 
 **Test chat completion:**
 ```bash
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Authorization: Bearer secret-token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -142,7 +142,7 @@ To switch back to OpenAI/OpenRouter:
       "provider": "openai",
       "model": "qwen-coder",
       "apiKey": "secret-token",
-      "apiBase": "http://localhost:8000/v1"
+      "apiBase": "http://localhost:11435/v1"
     },
     {
       "title": "GPT-4 (Fallback)",

@@ -15,10 +15,8 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-import openai
-
 from mdrag.dependencies import AgentDependencies
-from mdrag.tools import hybrid_search, SearchResult
+from mdrag.tools import SearchResult, hybrid_search
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +59,7 @@ class WikiService:
                 return self._empty_structure(title)
 
             # Step 2: Use LLM to organize documents into wiki structure
-            structure = await self._generate_structure_with_llm(
-                title, documents
-            )
+            structure = await self._generate_structure_with_llm(title, documents)
 
             return structure
 
@@ -161,12 +157,6 @@ class WikiService:
             context_text = "\n".join(context_parts)
 
             # Generate response
-            settings = self.deps.settings
-            client = openai.AsyncOpenAI(
-                api_key=settings.llm_api_key,
-                base_url=settings.llm_base_url,
-            )
-
             system_prompt = (
                 f"You are a knowledgeable assistant for a wiki about '{wiki_context}'. "
                 "Answer questions using ONLY the provided context from the knowledge base. "
@@ -178,9 +168,7 @@ class WikiService:
 
             # Add conversation history
             for msg in messages[:-1]:
-                llm_messages.append(
-                    {"role": msg["role"], "content": msg["content"]}
-                )
+                llm_messages.append({"role": msg["role"], "content": msg["content"]})
 
             # Add context with the last message
             user_prompt = (
@@ -189,14 +177,10 @@ class WikiService:
             )
             llm_messages.append({"role": "user", "content": user_prompt})
 
-            response = await client.chat.completions.create(
-                model=settings.llm_model,
+            response = await self.deps.llm_client.create(
                 messages=llm_messages,
-                temperature=0.3,
                 stream=False,
             )
-            await client.close()
-
             return response.choices[0].message.content.strip()
 
         finally:
@@ -217,6 +201,7 @@ class WikiService:
         await self.initialize()
 
         try:
+
             class DepsWrapper:
                 def __init__(self, deps: AgentDependencies):
                     self.deps = deps
@@ -226,18 +211,9 @@ class WikiService:
 
             context = self._build_page_context(results, source_documents)
 
-            settings = self.deps.settings
-            client = openai.AsyncOpenAI(
-                api_key=settings.llm_api_key,
-                base_url=settings.llm_base_url,
-            )
+            prompt = self._build_page_prompt(page_title, wiki_title, context, results)
 
-            prompt = self._build_page_prompt(
-                page_title, wiki_title, context, results
-            )
-
-            response = await client.chat.completions.create(
-                model=settings.llm_model,
+            response = await self.deps.llm_client.create(
                 messages=[
                     {
                         "role": "system",
@@ -250,15 +226,12 @@ class WikiService:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.3,
                 stream=True,
             )
 
             async for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
-
-            await client.close()
 
         except Exception as e:
             logger.exception("Error streaming page content: %s", str(e))
@@ -295,11 +268,7 @@ class WikiService:
                     self.deps = deps
 
             ctx = DepsWrapper(self.deps)
-            query = (
-                f"{wiki_context}: {last_message}"
-                if wiki_context
-                else last_message
-            )
+            query = f"{wiki_context}: {last_message}" if wiki_context else last_message
             results = await hybrid_search(ctx, query, match_count=match_count)
 
             context_parts = []
@@ -309,12 +278,6 @@ class WikiService:
                 )
             context_text = "\n".join(context_parts)
 
-            settings = self.deps.settings
-            client = openai.AsyncOpenAI(
-                api_key=settings.llm_api_key,
-                base_url=settings.llm_base_url,
-            )
-
             system_prompt = (
                 f"You are a knowledgeable assistant for a wiki about '{wiki_context}'. "
                 "Answer questions using ONLY the provided context. "
@@ -323,9 +286,7 @@ class WikiService:
 
             llm_messages = [{"role": "system", "content": system_prompt}]
             for msg in messages[:-1]:
-                llm_messages.append(
-                    {"role": msg["role"], "content": msg["content"]}
-                )
+                llm_messages.append({"role": msg["role"], "content": msg["content"]})
 
             user_prompt = (
                 f"Context from knowledge base:\n{context_text}\n\n"
@@ -333,18 +294,14 @@ class WikiService:
             )
             llm_messages.append({"role": "user", "content": user_prompt})
 
-            response = await client.chat.completions.create(
-                model=settings.llm_model,
+            response = await self.deps.llm_client.create(
                 messages=llm_messages,
-                temperature=0.3,
                 stream=True,
             )
 
             async for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
-
-            await client.close()
 
         except Exception as e:
             logger.exception("Error streaming chat: %s", str(e))
@@ -395,9 +352,7 @@ class WikiService:
                 titles = group.get("titles", [])[:5]
                 description = f"Documents from {source_type}: {', '.join(str(t) for t in titles[:3])}"
 
-                project_id = hashlib.md5(
-                    source_type.encode()
-                ).hexdigest()[:12]
+                project_id = hashlib.md5(source_type.encode()).hexdigest()[:12]
 
                 projects.append(
                     {
@@ -436,9 +391,7 @@ class WikiService:
         self, filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Discover ingested documents from MongoDB."""
-        docs_collection = self.deps.db[
-            self.deps.settings.mongodb_collection_documents
-        ]
+        docs_collection = self.deps.db[self.deps.settings.mongodb_collection_documents]
 
         query: Dict[str, Any] = {}
         if filters:
@@ -467,12 +420,6 @@ class WikiService:
         self, title: str, documents: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Use LLM to organize documents into a wiki structure."""
-        settings = self.deps.settings
-        client = openai.AsyncOpenAI(
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
-        )
-
         doc_summaries = []
         for doc in documents[:50]:
             doc_summaries.append(
@@ -526,8 +473,7 @@ Rules:
 Respond with ONLY the JSON structure."""
 
         try:
-            response = await client.chat.completions.create(
-                model=settings.llm_model,
+            response = await self.deps.llm_client.create(
                 messages=[
                     {
                         "role": "system",
@@ -535,10 +481,7 @@ Respond with ONLY the JSON structure."""
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.3,
             )
-            await client.close()
-
             content = response.choices[0].message.content.strip()
 
             # Clean markdown code blocks if present
@@ -551,16 +494,18 @@ Respond with ONLY the JSON structure."""
             structure = json.loads(content)
 
             # Ensure required fields
-            wiki_id = hashlib.md5(
-                f"{title}-{time.time()}".encode()
-            ).hexdigest()[:12]
+            wiki_id = hashlib.md5(f"{title}-{time.time()}".encode()).hexdigest()[:12]
 
             structure.setdefault("id", wiki_id)
             structure.setdefault("title", title)
-            structure.setdefault("description", f"Wiki generated from {len(documents)} documents")
+            structure.setdefault(
+                "description", f"Wiki generated from {len(documents)} documents"
+            )
             structure.setdefault("pages", [])
             structure.setdefault("sections", [])
-            structure.setdefault("rootSections", [s["id"] for s in structure.get("sections", [])])
+            structure.setdefault(
+                "rootSections", [s["id"] for s in structure.get("sections", [])]
+            )
 
             return structure
 
@@ -576,9 +521,7 @@ Respond with ONLY the JSON structure."""
         self, title: str, documents: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Create a fallback wiki structure when LLM fails."""
-        wiki_id = hashlib.md5(
-            f"{title}-{time.time()}".encode()
-        ).hexdigest()[:12]
+        wiki_id = hashlib.md5(f"{title}-{time.time()}".encode()).hexdigest()[:12]
 
         pages = []
         for i, doc in enumerate(documents[:10]):
@@ -712,18 +655,8 @@ Generate the wiki page content now:"""
         results: List[SearchResult],
     ) -> str:
         """Generate page content using LLM."""
-        settings = self.deps.settings
-        client = openai.AsyncOpenAI(
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
-        )
-
-        prompt = self._build_page_prompt(
-            page_title, wiki_title, context, results
-        )
-
-        response = await client.chat.completions.create(
-            model=settings.llm_model,
+        prompt = self._build_page_prompt(page_title, wiki_title, context, results)
+        response = await self.deps.llm_client.create(
             messages=[
                 {
                     "role": "system",
@@ -736,8 +669,5 @@ Generate the wiki page content now:"""
                 },
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.3,
         )
-        await client.close()
-
         return response.choices[0].message.content.strip()

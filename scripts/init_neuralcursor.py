@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.settings import load_settings
 from src.integrations.neo4j.client import Neo4jClient
-from src.integrations.neo4j.schema import PARASchema
 from src.memory_gateway.gateway import MemoryGateway
 from src.llm.vram_monitor import VRAMMonitor, create_vram_dashboard_html
 from src.llm.vllm_config import VRAMMonitorConfig

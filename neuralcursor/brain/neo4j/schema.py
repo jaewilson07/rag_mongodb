@@ -6,7 +6,6 @@ Defines constraints, indexes, and the PARA ontology structure.
 
 from typing import Any
 
-from neo4j import AsyncGraphDatabase, AsyncSession
 
 
 # Cypher queries for schema initialization

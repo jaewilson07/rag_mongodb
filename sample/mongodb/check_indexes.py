@@ -1,13 +1,14 @@
 """Check MongoDB indexes for the RAG system."""
 
 import asyncio
-from pymongo import AsyncMongoClient
+
 from mdrag.settings import load_settings
+from pymongo import AsyncMongoClient
 
 
 async def main():
     settings = load_settings()
-    client = AsyncMongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+    client = AsyncMongoClient(settings.mongodb_connection_string, serverSelectionTimeoutMS=5000)
     db = client[settings.mongodb_database]
 
     try:

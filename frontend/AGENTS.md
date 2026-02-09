@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Next.js 14 application providing four user-facing surfaces: Knowledge Wiki generation, Web Crawler, Save & Research (Instapaper-style), and Readings browser. Designed as a PWA with Android Share Target support.
+Next.js 14 application (package name: `deepwiki-frontend`) providing four user-facing surfaces: Knowledge Wiki generation, Web Crawler, Save & Research (Instapaper-style), and Readings browser. Designed as a PWA with Android Share Target support.
 
 ## Architecture
 
@@ -103,3 +103,7 @@ When installed via "Add to Home Screen" on Android Chrome, the app appears in th
 6. **Theme uses CSS custom properties.** Colors like `--accent-primary`, `--card-bg`, `--border-color` are set on `:root` and `[data-theme="dark"]`. Tailwind classes reference these via `var()`. No Tailwind dark: prefix needed.
 
 7. **Standalone output for Docker.** `next.config.mjs` sets `output: "standalone"` which produces a self-contained Node.js server. The Dockerfile copies `.next/standalone` + `.next/static` for a minimal production image.
+
+## See Also
+
+- [docs/deepwiki-frontend.md](../docs/deepwiki-frontend.md) - User-facing setup, development, and deployment guide for the DeepWiki frontend.

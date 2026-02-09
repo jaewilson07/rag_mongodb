@@ -1,9 +1,10 @@
 """Settings configuration for MongoDB RAG Agent."""
 
-from pydantic_settings import BaseSettings
-from pydantic import Field, ConfigDict
-from dotenv import load_dotenv
 from typing import Optional
+
+from dotenv import load_dotenv
+from pydantic import ConfigDict, Field, computed_field
+from pydantic_settings import BaseSettings
 
 # Load environment variables from .env file
 load_dotenv()
@@ -17,7 +18,25 @@ class Settings(BaseSettings):
     )
 
     # MongoDB Configuration
-    mongodb_uri: str = Field(..., description="MongoDB Atlas connection string")
+    mongodb_uri: Optional[str] = Field(
+        default=None,
+        description="MongoDB connection string (if provided, overrides composed URI)",
+    )
+
+    mongodb_host: str = Field(
+        default="localhost", description="MongoDB host (use 'atlas-local' for Docker)"
+    )
+
+    mongodb_port: int = Field(default=27017, description="MongoDB port")
+
+    mongodb_username: str = Field(default="admin", description="MongoDB username")
+
+    mongodb_password: str = Field(default="admin123", description="MongoDB password")
+
+    mongodb_docker_port: int = Field(
+        default=7017,
+        description="Host port for this project's Docker MongoDB (atlas-local). Used by sample pre-flight for auto-start.",
+    )
 
     mongodb_database: str = Field(default="rag_db", description="MongoDB database name")
 
@@ -47,6 +66,20 @@ class Settings(BaseSettings):
         description="Full-text search index name (must be created in Atlas UI)",
     )
 
+    @computed_field
+    @property
+    def mongodb_connection_string(self) -> str:
+        """Compose MongoDB URI from components or return provided URI."""
+        if self.mongodb_uri and self.mongodb_uri.strip():
+            return self.mongodb_uri
+
+        # Construct URI from components
+        return (
+            f"mongodb://{self.mongodb_username}:{self.mongodb_password}"
+            f"@{self.mongodb_host}:{self.mongodb_port}"
+            f"/{self.mongodb_database}?authSource=admin"
+        )
+
     # LLM Configuration (OpenAI-compatible)
     llm_provider: str = Field(
         default="openrouter",
@@ -63,6 +96,11 @@ class Settings(BaseSettings):
     llm_base_url: Optional[str] = Field(
         default="https://openrouter.ai/api/v1",
         description="Base URL for the LLM API (for OpenAI-compatible providers)",
+    )
+
+    llm_temperature: Optional[float] = Field(
+        default=None,
+        description="LLM sampling temperature. When None, omit from API (models that reject it: OpenRouter, some vLLM). When set (e.g. 0.3), pass to API (Ollama supports it).",
     )
 
     # Embedding Configuration

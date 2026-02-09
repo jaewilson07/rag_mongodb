@@ -1,12 +1,15 @@
 """Dependencies for MongoDB RAG Agent."""
 
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
 import logging
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
+
+from mdrag.llm.completion_client import LLMCompletionClient
+from mdrag.retrieval.embeddings import EmbeddingClient
+from mdrag.settings import load_settings
+from mdrag.validation import ValidationError, validate_mongodb
 from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-from mdrag.settings import load_settings
-from mdrag.retrieval.embeddings import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +22,7 @@ class AgentDependencies:
     mongo_client: Optional[AsyncMongoClient] = None
     db: Optional[Any] = None
     embedding_client: Optional[EmbeddingClient] = None
+    llm_client: Optional[LLMCompletionClient] = None
     settings: Optional[Any] = None
 
     # Session context
@@ -35,6 +39,7 @@ class AgentDependencies:
         Raises:
             ConnectionFailure: If MongoDB connection fails
             ServerSelectionTimeoutError: If MongoDB server selection times out
+            ValidationError: If MongoDB schema (collections/indexes) is invalid
             ValueError: If settings cannot be loaded
         """
         if not self.settings:
@@ -44,11 +49,18 @@ class AgentDependencies:
                 self.settings.mongodb_database,
             )
 
+        # Validate MongoDB connection and schema before creating client
+        try:
+            await validate_mongodb(self.settings, strict=True)
+        except ValidationError as e:
+            logger.exception("mongodb_validation_failed error=%s", str(e))
+            raise
+
         # Initialize MongoDB client
         if not self.mongo_client:
             try:
                 self.mongo_client = AsyncMongoClient(
-                    self.settings.mongodb_uri, serverSelectionTimeoutMS=5000
+                    self.settings.mongodb_connection_string, serverSelectionTimeoutMS=5000
                 )
                 self.db = self.mongo_client[self.settings.mongodb_database]
 
@@ -69,6 +81,10 @@ class AgentDependencies:
             self.embedding_client = EmbeddingClient(settings=self.settings)
             await self.embedding_client.initialize()
 
+        # Initialize LLM completion client (provider-aware temperature)
+        if not self.llm_client:
+            self.llm_client = LLMCompletionClient(settings=self.settings)
+
     async def cleanup(self) -> None:
         """Clean up external connections."""
         if self.mongo_client:
@@ -79,6 +95,9 @@ class AgentDependencies:
         if self.embedding_client:
             await self.embedding_client.close()
             self.embedding_client = None
+        if self.llm_client:
+            await self.llm_client.close()
+            self.llm_client = None
 
     async def get_embedding(self, text: str) -> list[float]:
         """

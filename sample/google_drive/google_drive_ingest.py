@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -66,6 +65,7 @@ async def _run() -> None:
         print("\n   Setup instructions:")
         print("   1. Create service account in Google Cloud Console")
         print("   2. Download JSON key and set GOOGLE_SERVICE_ACCOUNT_FILE in .env")
+        sys.exit(1)
         print("   3. Share target files/folders with service account email")
         print("   4. Set EMBEDDING_API_KEY in .env")
         return

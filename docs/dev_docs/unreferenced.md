@@ -35,10 +35,11 @@ Date: 2026-01-31
   - Status: Not included in pytest discovery or CI.
   - Recommendation: Keep as manual smoke scripts and document in README.
 
-### 3) Docs likely not referenced
-- [docs/desgin_patterns/document_ingestion.md](docs/desgin_patterns/document_ingestion.md)
-  - Status: Located in a misspelled directory; no inbound references were found.
-  - Recommendation: Move to docs/design_patterns/ and update links, or remove if it is outdated.
+### 3) Docs now properly organized
+- Design patterns reorganized into [docs/design-patterns/](../design-patterns/)
+  - Status: Previously in single file (design_patterns.md), now split into focused pattern files
+  - Files: README.md, docker-compose.md, ingestion-validation.md, document_ingestion.md
+  - All references updated across AGENTS.md, src/, sample/, and docs/ files
 
 ### 4) Generated / local artifacts (should not be tracked)
 - [mdrag.egg-info/](mdrag.egg-info/)

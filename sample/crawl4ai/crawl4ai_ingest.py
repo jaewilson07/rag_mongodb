@@ -66,6 +66,7 @@ async def _run() -> None:
         print("\n   Setup instructions:")
         print("   1. Install Playwright: playwright install")
         print("   2. Set EMBEDDING_API_KEY in .env")
+        sys.exit(1)
         return
     
     workflow = IngestionWorkflow(config=IngestionConfig())

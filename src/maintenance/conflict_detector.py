@@ -5,7 +5,6 @@ from typing import List, Dict, Any
 from datetime import datetime
 
 from src.memory_gateway.gateway import MemoryGateway
-from src.integrations.neo4j.queries import SecondBrainQueries
 
 logger = logging.getLogger(__name__)
 

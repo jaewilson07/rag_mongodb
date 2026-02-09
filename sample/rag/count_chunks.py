@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import asyncio
 
-from pymongo import AsyncMongoClient
-
 from mdrag.settings import load_settings
+from pymongo import AsyncMongoClient
 
 
 async def _run() -> None:
     settings = load_settings()
-    client = AsyncMongoClient(settings.mongodb_uri)
+    client = AsyncMongoClient(settings.mongodb_connection_string)
     try:
         db = client[settings.mongodb_database]
         chunks_collection = db[settings.mongodb_collection_chunks]

@@ -10,9 +10,9 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
-from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
-from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
 from neuralcursor.brain.memgpt.agent import MemGPTAgent
+from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
+from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
 from neuralcursor.settings import get_settings
 
 console = Console()
@@ -46,7 +46,7 @@ class NeuralCursorCLI:
 
             # MongoDB
             mongodb_config = MongoDBConfig(
-                uri=self.settings.mongodb_uri,
+                uri=self.settings.mongodb_connection_string,
                 database=self.settings.mongodb_database,
             )
             self.mongodb = MongoDBClient(mongodb_config)

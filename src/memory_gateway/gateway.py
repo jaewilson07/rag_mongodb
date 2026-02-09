@@ -1,33 +1,33 @@
 """Memory Gateway - Unified interface for NeuralCursor Second Brain."""
 
 import logging
-from typing import Optional, Dict, Any, List
-from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConnectionFailure
 
-from src.settings import Settings
 from src.integrations.neo4j.client import Neo4jClient
-from src.integrations.neo4j.queries import SecondBrainQueries
 from src.integrations.neo4j.models import (
-    Project,
     Area,
-    Decision,
-    Requirement,
     CodeEntity,
-    Resource,
+    Decision,
     NodeType,
+    Project,
+    Requirement,
+    Resource,
 )
+from src.integrations.neo4j.queries import SecondBrainQueries
+from src.settings import Settings
+
 from .models import (
+    ArchitecturalContext,
+    ArchitecturalQuery,
+    GraphStats,
+    MemoryOperation,
     MemoryRequest,
     MemoryResponse,
     MemoryType,
-    MemoryOperation,
-    ArchitecturalQuery,
-    ArchitecturalContext,
     WorkingSet,
-    GraphStats,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ class MemoryGateway:
         await self.neo4j_client.connect()
         
         # Connect to MongoDB
-        self.mongo_client = AsyncIOMotorClient(self.settings.mongodb_uri)
+        self.mongo_client = AsyncIOMotorClient(self.settings.mongodb_connection_string)
         try:
             await self.mongo_client.admin.command("ping")
             logger.info("memory_gateway_mongodb_connected")

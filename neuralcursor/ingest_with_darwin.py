@@ -7,28 +7,28 @@ then stores them in the NeuralCursor brain (Neo4j + MongoDB).
 
 import argparse
 import asyncio
-from pathlib import Path
 
 # Add src to path for imports
 import sys
+from pathlib import Path
+
 sys.path.insert(0, '/workspace/src')
 
 from dotenv import load_dotenv
 
 from ingestion.docling.chunker import ChunkingConfig, create_chunker
+from ingestion.docling.darwinxml_validator import DarwinXMLValidator, ValidationStatus
+from ingestion.docling.darwinxml_wrapper import DarwinXMLWrapper
 from ingestion.docling.processor import DoclingProcessor
+from ingestion.embedder import create_embedder
 from ingestion.models import UploadCollectionRequest
 from ingestion.sources.upload_source import UploadCollector
-from ingestion.embedder import create_embedder
-from ingestion.docling.darwinxml_wrapper import DarwinXMLWrapper
-from ingestion.docling.darwinxml_validator import DarwinXMLValidator, ValidationStatus
 from mdrag_logging.service_logging import get_logger, setup_logging
-from settings import load_settings
-
-from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
-from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
 from neuralcursor.brain.darwinxml.ingestion import DarwinXMLIngestionBridge
+from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
+from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
 from neuralcursor.settings import get_settings as get_neuralcursor_settings
+from settings import load_settings
 
 load_dotenv()
 
@@ -358,7 +358,7 @@ async def main():
     
     # Initialize MongoDB client
     mongodb_config = MongoDBConfig(
-        uri=nc_settings.mongodb_uri,
+        uri=nc_settings.mongodb_connection_string,
         database=nc_settings.mongodb_database,
     )
     mongodb_client = MongoDBClient(mongodb_config)
@@ -379,7 +379,7 @@ async def main():
             print(f"\n✅ Ingestion complete: {result}")
         else:
             result = await ingestion.ingest_directory(Path(args.directory))
-            print(f"\n✅ Ingestion complete:")
+            print("\n✅ Ingestion complete:")
             print(f"   Files processed: {result['files_processed']}")
             print(f"   Total chunks: {result['total_chunks']}")
             print(f"   PARA nodes created: {result['total_para_nodes']}")

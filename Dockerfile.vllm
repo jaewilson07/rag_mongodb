@@ -3,9 +3,11 @@ FROM vllm/vllm-openai:latest
 # Install git (required for installing transformers from source)
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Install uv for speed
-RUN pip install uv
+# vLLM nightly + transformers from git (GLM-4.7-Flash support)
+# See: https://huggingface.co/zai-org/GLM-4.7-Flash
+#      https://medium.com/@zh.milo/glm-4-7-flash-the-ultimate-2026-guide-to-local-ai-coding-assistant-93a43c3f8db3
+RUN pip install -U vllm --pre \
+    --index-url https://pypi.org/simple \
+    --extra-index-url https://wheels.vllm.ai/nightly
 
-# Install latest transformers (for GLM-4.7 support) and flash-attn
-# We use --no-build-isolation to keep existing torch/cuda environment
-RUN uv pip install --system "git+https://github.com/huggingface/transformers.git" flash-attn --no-build-isolation
+RUN pip install git+https://github.com/huggingface/transformers.git

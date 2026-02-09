@@ -1,8 +1,11 @@
 """Configuration validation script for MongoDB RAG Agent."""
 
+import asyncio
 import sys
-from mdrag.settings import load_settings
+
 from mdrag.providers import get_model_info
+from mdrag.settings import load_settings
+from mdrag.validation import ValidationError, validate_mongodb, validate_redis
 
 
 def mask_credential(value: str) -> str:
@@ -26,14 +29,14 @@ def validate_config() -> bool:
         print()
 
         # Load settings
-        print("[1/4] Loading settings...")
+        print("[1/6] Loading settings...")
         settings = load_settings()
         print("[OK] Settings loaded successfully")
         print()
 
         # Validate MongoDB configuration
-        print("[2/4] Validating MongoDB configuration...")
-        print(f"  MongoDB URI: {mask_credential(settings.mongodb_uri)}")
+        print("[2/6] Validating MongoDB configuration...")
+        print(f"  MongoDB URI: {mask_credential(settings.mongodb_connection_string)}")
         print(f"  Database: {settings.mongodb_database}")
         print(f"  Documents Collection: {settings.mongodb_collection_documents}")
         print(f"  Chunks Collection: {settings.mongodb_collection_chunks}")
@@ -42,8 +45,37 @@ def validate_config() -> bool:
         print("[OK] MongoDB configuration present")
         print()
 
+        # Validate MongoDB connection
+        print("[3/6] Validating MongoDB connection...")
+        try:
+            asyncio.run(validate_mongodb(settings, strict=False))
+        except ValidationError as e:
+            print()
+            print("[FAIL] MongoDB connection or schema validation failed")
+            print()
+            print(str(e))
+            print()
+            return False
+        print("[OK] MongoDB connection successful")
+        print()
+
+        # Validate Redis connection (required for ingestion job queue)
+        print("[4/6] Validating Redis connection...")
+        try:
+            redis_url = getattr(settings, "redis_url", "redis://localhost:6379/0")
+            validate_redis(redis_url)
+        except ValidationError as e:
+            print()
+            print("[FAIL] Redis connection validation failed")
+            print()
+            print(str(e))
+            print()
+            return False
+        print("[OK] Redis connection successful")
+        print()
+
         # Validate LLM configuration
-        print("[3/4] Validating LLM configuration...")
+        print("[5/6] Validating LLM configuration...")
         model_info = get_model_info()
         print(f"  Provider: {model_info['llm_provider']}")
         print(f"  Model: {model_info['llm_model']}")
@@ -53,7 +85,7 @@ def validate_config() -> bool:
         print()
 
         # Validate Embedding configuration
-        print("[4/4] Validating Embedding configuration...")
+        print("[6/6] Validating Embedding configuration...")
         print(f"  Provider: {settings.embedding_provider}")
         print(f"  Model: {settings.embedding_model}")
         print(f"  Dimension: {settings.embedding_dimension}")

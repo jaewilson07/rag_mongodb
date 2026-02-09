@@ -66,3 +66,12 @@ See: `sample/docling/chunk_pydantic_sample.py` for a working example of heading-
 	- Mongot (Atlas Search): host 7027 -> container 27027
 	- SearXNG: host 7080 -> container 8080
 - Use `.env` + `env_file` in compose to centralize configuration and reduce inline env overload.
+
+## See Also
+
+- [Ingestion Pipeline Validation](ingestion-validation.md) - Pre-flight validation for ingestion flows
+- [Docker Compose Patterns](docker-compose.md) - Docker configuration conventions
+
+---
+
+_Last updated: 2026-02-09_

@@ -30,8 +30,8 @@ async def _run() -> None:
     }
     
     if not print_pre_flight_results(checks):
-        return
-    
+        sys.exit(1)
+
     service = WikiService()
     projects = await service.list_projects()
 

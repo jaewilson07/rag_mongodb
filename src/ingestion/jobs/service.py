@@ -17,10 +17,17 @@ from mdrag.ingestion.models import (
     WebCollectionRequest,
 )
 from mdrag.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
+from mdrag.ingestion.validation import validate_ingestion
 from mdrag.mdrag_logging.service_logging import get_logger, log_async
 from mdrag.settings import Settings
 
 logger = get_logger(__name__)
+
+_SOURCE_TYPE_TO_COLLECTOR: dict[str, str] = {
+    "web": "crawl4ai",
+    "gdrive": "gdrive",
+    "upload": "upload",
+}
 
 
 class IngestionService:
@@ -56,6 +63,15 @@ class IngestionService:
 
         try:
             await self.workflow.initialize()
+            collector_name = _SOURCE_TYPE_TO_COLLECTOR.get(
+                source_type, source_type or "upload"
+            )
+            await validate_ingestion(
+                self.settings,
+                collectors=[collector_name],
+                strict_mongodb=False,
+                require_redis=True,
+            )
             results: list[IngestionResult] = []
             namespace = Namespace(**(payload.get("namespace") or {}))
 

@@ -1,20 +1,21 @@
 """MemGPT wrapper for NeuralCursor Second Brain."""
 
 import logging
-from typing import Optional, Dict, Any, List
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 try:
-    from letta import create_client, LettaClient
-    from letta.schemas.message import Message
+    from letta import LettaClient, create_client
+
     LETTA_AVAILABLE = True
 except ImportError:
     LETTA_AVAILABLE = False
 
-from src.settings import Settings
 from src.memory_gateway.gateway import MemoryGateway
-from .tools import MemoryTools
+from src.settings import Settings
+
 from .context_manager import ContextManager
+from .tools import MemoryTools
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 class MemGPTWrapper:
     """
     MemGPT wrapper for stateful context management.
-    
+
     This wrapper:
     - Manages MemGPT agent lifecycle
     - Registers Second Brain tools
@@ -33,7 +34,7 @@ class MemGPTWrapper:
     def __init__(self, settings: Settings, memory_gateway: MemoryGateway):
         """
         Initialize MemGPT wrapper.
-        
+
         Args:
             settings: Application settings
             memory_gateway: Memory gateway instance
@@ -42,12 +43,12 @@ class MemGPTWrapper:
             raise RuntimeError(
                 "Letta (MemGPT) not installed. Install with: pip install letta"
             )
-        
+
         self.settings = settings
         self.gateway = memory_gateway
         self.memory_tools = MemoryTools(memory_gateway)
         self.context_manager = ContextManager(memory_gateway)
-        
+
         self.client: Optional[LettaClient] = None
         self.agent_id: Optional[str] = None
         self._initialized = False
@@ -55,7 +56,7 @@ class MemGPTWrapper:
     async def initialize(self, agent_name: str = "neuralcursor") -> None:
         """
         Initialize MemGPT client and agent.
-        
+
         Args:
             agent_name: Name for the MemGPT agent
         """
@@ -63,13 +64,11 @@ class MemGPTWrapper:
             # Create Letta client
             self.client = create_client()
             logger.info("memgpt_client_created")
-            
+
             # Try to get existing agent
             agents = self.client.list_agents()
-            existing_agent = next(
-                (a for a in agents if a.name == agent_name), None
-            )
-            
+            existing_agent = next((a for a in agents if a.name == agent_name), None)
+
             if existing_agent:
                 self.agent_id = existing_agent.id
                 logger.info("memgpt_agent_loaded", extra={"agent_id": self.agent_id})
@@ -90,9 +89,9 @@ class MemGPTWrapper:
                 )
                 self.agent_id = agent.id
                 logger.info("memgpt_agent_created", extra={"agent_id": self.agent_id})
-            
+
             self._initialized = True
-            
+
         except Exception as e:
             logger.exception("memgpt_initialization_failed", extra={"error": str(e)})
             raise
@@ -100,7 +99,7 @@ class MemGPTWrapper:
     def _get_system_prompt(self) -> str:
         """
         Get system prompt for MemGPT agent.
-        
+
         Returns:
             System prompt
         """
@@ -158,33 +157,35 @@ Remember: The goal is "Architectural Intuition" - always know WHY code exists.
     ) -> str:
         """
         Send a message to MemGPT agent and get response.
-        
+
         Args:
             message: User message
             context: Optional context dictionary
-            
+
         Returns:
             Agent response
         """
         if not self._initialized:
             raise RuntimeError("MemGPT not initialized. Call initialize() first.")
-        
+
         try:
             # Check if context paging is needed
             await self.context_manager.check_and_page_context(self.agent_id)
-            
+
             # Send message
             response = self.client.send_message(
                 agent_id=self.agent_id,
                 message=message,
                 role="user",
             )
-            
+
             # Extract response text
             if isinstance(response, list):
                 # Get the last assistant message
                 assistant_messages = [
-                    msg for msg in response if hasattr(msg, 'role') and msg.role == 'assistant'
+                    msg
+                    for msg in response
+                    if hasattr(msg, "role") and msg.role == "assistant"
                 ]
                 if assistant_messages:
                     response_text = assistant_messages[-1].text
@@ -192,48 +193,49 @@ Remember: The goal is "Architectural Intuition" - always know WHY code exists.
                     response_text = str(response[-1]) if response else "No response"
             else:
                 response_text = str(response)
-            
+
             logger.info(
                 "memgpt_message_sent",
-                extra={"message_length": len(message), "response_length": len(response_text)},
+                extra={
+                    "message_length": len(message),
+                    "response_length": len(response_text),
+                },
             )
-            
+
             return response_text
-            
+
         except Exception as e:
             logger.exception("memgpt_message_failed", extra={"error": str(e)})
             raise
 
-    async def get_conversation_history(
-        self, limit: int = 50
-    ) -> List[Dict[str, Any]]:
+    async def get_conversation_history(self, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Get conversation history for current agent.
-        
+
         Args:
             limit: Maximum messages to retrieve
-            
+
         Returns:
             List of messages
         """
         if not self._initialized:
             raise RuntimeError("MemGPT not initialized. Call initialize() first.")
-        
+
         try:
             messages = self.client.get_messages(
                 agent_id=self.agent_id,
                 limit=limit,
             )
-            
+
             return [
                 {
-                    "role": msg.role if hasattr(msg, 'role') else "unknown",
-                    "content": msg.text if hasattr(msg, 'text') else str(msg),
-                    "timestamp": msg.created_at if hasattr(msg, 'created_at') else None,
+                    "role": msg.role if hasattr(msg, "role") else "unknown",
+                    "content": msg.text if hasattr(msg, "text") else str(msg),
+                    "timestamp": msg.created_at if hasattr(msg, "created_at") else None,
                 }
                 for msg in messages
             ]
-            
+
         except Exception as e:
             logger.exception("memgpt_history_failed", extra={"error": str(e)})
             return []
@@ -241,33 +243,37 @@ Remember: The goal is "Architectural Intuition" - always know WHY code exists.
     async def save_conversation_checkpoint(self) -> str:
         """
         Save current conversation state as a checkpoint.
-        
+
         Returns:
             Checkpoint ID
         """
         if not self._initialized:
             raise RuntimeError("MemGPT not initialized. Call initialize() first.")
-        
+
         try:
             # Get current state
             agent_state = self.client.get_agent(self.agent_id)
-            
+
             # Save to MongoDB as episodic memory
             checkpoint_data = {
                 "agent_id": self.agent_id,
-                "agent_name": agent_state.name if hasattr(agent_state, 'name') else "unknown",
+                "agent_name": agent_state.name
+                if hasattr(agent_state, "name")
+                else "unknown",
                 "timestamp": datetime.utcnow().isoformat(),
                 "state": "checkpoint",
             }
-            
+
             checkpoint_id = await self.memory_tools.save_episodic_memory(
                 content=f"Conversation checkpoint for agent {self.agent_id}",
                 metadata=checkpoint_data,
             )
-            
-            logger.info("memgpt_checkpoint_saved", extra={"checkpoint_id": checkpoint_id})
+
+            logger.info(
+                "memgpt_checkpoint_saved", extra={"checkpoint_id": checkpoint_id}
+            )
             return checkpoint_id
-            
+
         except Exception as e:
             logger.exception("memgpt_checkpoint_failed", extra={"error": str(e)})
             raise
@@ -275,13 +281,13 @@ Remember: The goal is "Architectural Intuition" - always know WHY code exists.
     async def restore_from_checkpoint(self, checkpoint_id: str) -> None:
         """
         Restore conversation state from a checkpoint.
-        
+
         Args:
             checkpoint_id: Checkpoint ID to restore
         """
         if not self._initialized:
             raise RuntimeError("MemGPT not initialized. Call initialize() first.")
-        
+
         logger.info("memgpt_checkpoint_restore", extra={"checkpoint_id": checkpoint_id})
         # Implementation would restore agent state from checkpoint
         # This is a placeholder for the actual restoration logic

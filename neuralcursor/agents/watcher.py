@@ -10,10 +10,9 @@ Automatically detects:
 import asyncio
 import hashlib
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -21,9 +20,6 @@ from watchdog.observers import Observer
 from neuralcursor.brain.neo4j.client import Neo4jClient
 from neuralcursor.brain.neo4j.models import (
     FileNode,
-    CodeEntityNode,
-    Relationship,
-    RelationType,
 )
 from neuralcursor.settings import get_settings
 

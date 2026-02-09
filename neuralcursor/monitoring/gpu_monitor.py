@@ -5,7 +5,7 @@ GPU and VRAM monitoring for dual 3090 setup.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 import psutil
 from pydantic import BaseModel, Field

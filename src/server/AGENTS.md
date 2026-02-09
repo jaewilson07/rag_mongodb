@@ -93,13 +93,13 @@ flowchart LR
 Generates structured wikis from ingested data. Discovers documents in MongoDB, uses LLM to organize into sections/pages, streams page content via RAG (hybrid search → LLM).
 
 ### ReadingsService
-Save-and-research pipeline (Wallabag/Instapaper style). Auto-detects YouTube URLs. Pipeline: crawl/extract → LLM summary → SearXNG research → MongoDB store → RAG ingestion queue.
+Save-and-research pipeline (Wallabag/Instapaper style). Auto-detects YouTube URLs. Pipeline: crawl/extract → LLM summary → SearXNG research → MongoDB store → RAG ingestion queue. **Validation**: Runs `validate_readings(settings, url_type, searxng_url=...)` at start of `save_reading`; validates MongoDB, Redis, LLM API, plus Playwright/SearXNG (web) or yt-dlp/youtube-transcript-api (YouTube). Raises `ValidationError` on failure. See [docs/design-patterns/ingestion-validation.md](../../docs/design-patterns/ingestion-validation.md).
 
 ### QueryAPIService
 Grounded RAG query with citations. Delegates to `QueryService` which runs search → generation → grounding verification → trace storage.
 
 ### IngestJobService
-Job queue via Redis/RQ. Queues ingestion work for async processing. Jobs transition through PENDING → STARTED → FINISHED/FAILED.
+Job queue via Redis/RQ. Queues ingestion work for async processing. Jobs transition through PENDING → STARTED → FINISHED/FAILED. **Validation**: Queue-based flows (ReadingsService, API ingest) require Redis + at least one RQ worker listening to `default`. Run `uv run rq worker default --url redis://localhost:6379/0` in a separate terminal.
 
 ## Durable Lessons
 
@@ -114,3 +114,5 @@ Job queue via Redis/RQ. Queues ingestion work for async processing. Jobs transit
 5. **API versioning via prefix.** All routes use `/api/v1/` prefix from `APIConfig`. When v2 arrives, add new routers without breaking existing clients.
 
 6. **Media-type routing in ReadingsService.** `is_youtube_url()` at the top of `save_reading()` routes to the YouTube extraction pipeline. Add new media detectors here (podcasts, PDFs, etc.).
+
+7. **ReadingsService validation.** Validation runs before extraction; URL type determines collector-specific checks (Playwright for web, yt-dlp for YouTube). Don't skip validation—callers must handle `ValidationError` (API returns 500, samples exit 1).

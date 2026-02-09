@@ -12,39 +12,39 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from mdrag.validation import ValidationError, validate_mongodb, validate_neo4j
 
+from neuralcursor.brain.mongodb.client import ChatMessage, MongoDBClient
 from neuralcursor.brain.neo4j.client import Neo4jClient
 from neuralcursor.brain.neo4j.models import (
-    ProjectNode,
-    DecisionNode,
-    RequirementNode,
     CodeEntityNode,
-    ResourceNode,
+    DecisionNode,
+    ProjectNode,
     Relationship,
     RelationType,
+    RequirementNode,
+    ResourceNode,
 )
-from neuralcursor.brain.mongodb.client import MongoDBClient, ChatMessage
 from neuralcursor.settings import get_settings
 
 from .dependencies import (
-    init_clients,
-    close_clients,
-    get_neo4j_client,
-    get_mongodb_client,
     GatewayDependencies,
+    close_clients,
     get_gateway_deps,
+    get_mongodb_client,
+    get_neo4j_client,
+    init_clients,
 )
 from .models import (
     CreateNodeRequest,
     CreateRelationshipRequest,
+    FindPathRequest,
+    GraphQueryResponse,
+    HealthResponse,
+    NodeResponse,
     QueryGraphRequest,
     SaveChatMessageRequest,
-    SearchGraphRequest,
-    FindPathRequest,
-    NodeResponse,
-    GraphQueryResponse,
     SchemaInfoResponse,
-    HealthResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,41 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    # Startup
+    # Startup: Validate services first
+    settings = get_settings()
+    
+    try:
+        # Validate MongoDB
+        await validate_mongodb(settings, strict=False)
+        logger.info("✓ MongoDB validation passed")
+        
+        # Validate Neo4j
+        validate_neo4j(
+            settings.neo4j_uri,
+            settings.neo4j_username,
+            settings.neo4j_password,
+            settings.neo4j_database,
+        )
+        logger.info("✓ Neo4j validation passed")
+        
+        # Validate vLLM if using local LLM endpoints (conditional on URLs being set)
+        # NeuralCursor always configures LLM endpoints, so validate them
+        from mdrag.validation import validate_vllm
+        try:
+            validate_vllm(
+                settings.reasoning_llm_host,
+                settings.embedding_llm_host,
+            )
+            logger.info("✓ vLLM services validation passed")
+        except ValidationError as e:
+            logger.warning(f"vLLM validation failed (will degrade to remote APIs if configured):\n{e}")
+            # Don't fail startup - LLM orchestrator can gracefully degrade
+        
+    except ValidationError as e:
+        logger.error(f"Validation failed:\n{e}")
+        raise RuntimeError("Gateway service validation failed") from e
+    
+    # Initialize clients
     await init_clients()
     logger.info("gateway_server_started")
 

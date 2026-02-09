@@ -22,8 +22,8 @@ from neuralcursor.agents.librarian import LibrarianAgent
 from neuralcursor.agents.optimizer import GraphOptimizer
 from neuralcursor.agents.synthesizer import CrossProjectSynthesizer
 from neuralcursor.agents.watcher import FileSystemWatcherService
-from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
 from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
+from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
 from neuralcursor.monitoring.gpu_monitor import get_monitor
 from neuralcursor.settings import get_settings
 
@@ -73,7 +73,7 @@ class NeuralCursorOrchestrator:
 
             # Initialize MongoDB
             mongodb_config = MongoDBConfig(
-                uri=self.settings.mongodb_uri,
+                uri=self.settings.mongodb_connection_string,
                 database=self.settings.mongodb_database,
             )
             self.mongodb = MongoDBClient(mongodb_config)

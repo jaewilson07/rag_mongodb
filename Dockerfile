@@ -15,7 +15,7 @@ COPY src/ ./src/
 RUN uv venv /app/.venv
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
-    uv pip install --python /app/.venv/bin/python .
+    uv pip install --python /app/.venv/bin/python -e .
 
 # Final stage
 FROM python:3.11.7-slim
@@ -42,7 +42,6 @@ COPY --chown=app:app data/ ./data/
 
 # Set Python path to use virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app:$PYTHONPATH"
 ENV PYTHONUNBUFFERED=1
 
 # Drop privileges

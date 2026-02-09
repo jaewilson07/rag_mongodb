@@ -19,11 +19,11 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import httpx
-import openai
 
 from mdrag.dependencies import AgentDependencies
+from mdrag.ingestion.validation import validate_readings
 from mdrag.integrations.youtube import YouTubeExtractor, is_youtube_url
-from mdrag.settings import load_settings
+from mdrag.validation import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,10 @@ class ReadingsService:
             Complete reading with summary and related links
         """
         await self.initialize()
+        settings = self.deps.settings
+        url_type = "youtube" if is_youtube_url(url) else "web"
+        searxng_url = getattr(settings, "searxng_url", "http://localhost:7080")
+        await validate_readings(settings, url_type, searxng_url=searxng_url)
 
         try:
             reading_id = hashlib.md5(
@@ -149,6 +153,8 @@ class ReadingsService:
 
             return reading_doc
 
+        except ValidationError:
+            raise
         except Exception as e:
             logger.exception("Error saving reading for %s: %s", url, str(e))
             return {
@@ -335,12 +341,6 @@ class ReadingsService:
         self, title: str, content: str, url: str, media_type: str = "web"
     ) -> Dict[str, Any]:
         """Generate a summary and key points using LLM."""
-        settings = self.deps.settings
-        client = openai.AsyncOpenAI(
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
-        )
-
         # Truncate content for context window
         truncated = content[:8000] if content else "No content available."
 
@@ -386,8 +386,7 @@ If the content is empty or unclear, provide your best assessment based on the UR
 Return ONLY valid JSON."""
 
         try:
-            response = await client.chat.completions.create(
-                model=settings.llm_model,
+            response = await self.deps.llm_client.create(
                 messages=[
                     {
                         "role": "system",
@@ -395,10 +394,7 @@ Return ONLY valid JSON."""
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.3,
             )
-            await client.close()
-
             result_text = response.choices[0].message.content.strip()
 
             # Clean markdown code blocks

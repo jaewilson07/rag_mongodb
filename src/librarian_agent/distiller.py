@@ -12,8 +12,6 @@ from src.settings import Settings
 from src.memory_gateway.gateway import MemoryGateway
 from src.memory_gateway.models import MemoryRequest, MemoryType, MemoryOperation
 from src.integrations.neo4j.models import (
-    Project,
-    Area,
     Decision,
     Requirement,
     CodeEntity,
@@ -46,11 +44,12 @@ class KnowledgeDistiller:
         self.settings = settings
         self.gateway = memory_gateway
         
+        from mdrag.llm.completion_client import get_llm_init_kwargs
         self.llm = ChatOpenAI(
             model=settings.llm_model,
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
-            temperature=0.1,
+            **get_llm_init_kwargs(settings),
         )
 
     async def extract_entities_from_text(

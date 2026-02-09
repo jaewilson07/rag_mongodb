@@ -41,8 +41,8 @@ async def _run() -> None:
     }
     
     if not print_pre_flight_results(checks):
-        return
-    
+        sys.exit(1)
+
     service = ReadingsService()
     result = await service.list_readings(limit=args.limit)
 

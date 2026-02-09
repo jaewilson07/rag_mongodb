@@ -1,0 +1,80 @@
+# vLLM inference services for local GLM-4.7-Flash model
+# Can be run standalone OR included via docker-compose.yml
+# Standalone: docker compose -f docker-compose.vllm.yml -f docker-compose.vllm.48gb.yml up -d
+# Included: project name inherited from parent docker-compose.yml (ragagent)
+
+services:
+  vllm-glm:
+    build:
+      context: .
+      dockerfile: Dockerfile.vllm
+    container_name: vllm-glm
+    env_file:
+      - .env
+    ports:
+      - "${VLLM_PORT:-11435}:8000"
+    networks:
+      - rag_network
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      # vLLM nightly requires flashinfer 0.6.3 but flashinfer-cubin 0.6.3 not on PyPI yet
+      - FLASHINFER_DISABLE_VERSION_CHECK=1
+    volumes:
+      - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+    ipc: host  # Required for tensor parallel across GPUs (PyTorch shared memory)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2  # Both RTX 3090s
+              capabilities: [gpu]
+    command: >
+      --model zai-org/GLM-4.7-Flash
+      --tensor-parallel-size 2
+      --gpu-memory-utilization 0.90
+      --max-model-len 32768
+      --trust-remote-code
+      --served-model-name glm-4.7
+      --host 0.0.0.0
+      --port 8000
+      --enable-auto-tool-choice
+      --tool-call-parser glm47
+      --reasoning-parser glm45
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s  # Model loading can take 5 minutes
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    env_file:
+      - .env
+    ports:
+      - "4000:4000"
+    networks:
+      - rag_network
+    environment:
+      - LITELLM_LOG=${LITELLM_LOG:-INFO}  # Set DEBUG for verbose request tracing
+    volumes:
+      - ./docker/litellm-config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    depends_on:
+      vllm-glm:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  rag_network:
+    driver: bridge

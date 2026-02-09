@@ -1,5 +1,9 @@
 name: ragagent
 
+include:
+  - docker-compose.vllm.yml
+  # - docker-compose.vllm.48gb.yml
+
 services:
   atlas-local:
     image: mongodb/mongodb-atlas-local:latest
@@ -41,8 +45,13 @@ services:
     env_file:
       - .env
     environment:
-      # MongoDB connection (uses Docker service name)
-      MONGODB_URI: ${MONGODB_URI:-mongodb://${MONGODB_INITDB_ROOT_USERNAME:-admin}:${MONGODB_INITDB_ROOT_PASSWORD:-admin123}@atlas-local:27017/${MONGODB_INITDB_DATABASE:-rag_db}?authSource=admin}
+      # MongoDB component configuration (URI will be composed from these)
+      # Explicitly unset MONGODB_URI so Settings uses component-based composition
+      MONGODB_URI: ""
+      MONGODB_HOST: atlas-local
+      MONGODB_PORT: 27017
+      MONGODB_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-admin}
+      MONGODB_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD:-admin123}
       MONGODB_DATABASE: ${MONGODB_INITDB_DATABASE:-rag_db}
       MONGODB_COLLECTION_DOCUMENTS: documents
       MONGODB_COLLECTION_CHUNKS: chunks

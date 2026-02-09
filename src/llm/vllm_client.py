@@ -5,7 +5,8 @@ from typing import Optional, List, Dict, Any
 import httpx
 from openai import AsyncOpenAI
 
-from src.settings import Settings
+from mdrag.llm.completion_client import get_llm_init_kwargs
+from mdrag.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class VLLMClient:
         self,
         prompt: str,
         max_tokens: int = 2048,
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,
         stop: Optional[List[str]] = None,
     ) -> str:
         """
@@ -65,7 +66,8 @@ class VLLMClient:
         Args:
             prompt: Input prompt
             max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature
+            temperature: Sampling temperature. When None, use settings.llm_temperature;
+                when that is also None, omit (for vLLM configs that reject it).
             stop: Stop sequences
             
         Returns:
@@ -74,13 +76,18 @@ class VLLMClient:
         if not self.settings.vllm_enabled:
             raise RuntimeError("vLLM is not enabled. Set VLLM_ENABLED=true")
         
+        temp_kwargs = (
+            {"temperature": temperature}
+            if temperature is not None
+            else get_llm_init_kwargs(self.settings, provider_supports_temperature=True)
+        )
         try:
             response = await self.reasoning_client.completions.create(
                 model=self.settings.vllm_reasoning_model,
                 prompt=prompt,
                 max_tokens=max_tokens,
-                temperature=temperature,
                 stop=stop,
+                **temp_kwargs,
             )
             
             text = response.choices[0].text
@@ -101,7 +108,7 @@ class VLLMClient:
         self,
         messages: List[Dict[str, str]],
         max_tokens: int = 2048,
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,
     ) -> str:
         """
         Generate chat completion using reasoning model.
@@ -109,7 +116,8 @@ class VLLMClient:
         Args:
             messages: Chat messages in OpenAI format
             max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature
+            temperature: Sampling temperature. When None, use settings.llm_temperature;
+                when that is also None, omit.
             
         Returns:
             Generated response
@@ -117,12 +125,17 @@ class VLLMClient:
         if not self.settings.vllm_enabled:
             raise RuntimeError("vLLM is not enabled. Set VLLM_ENABLED=true")
         
+        temp_kwargs = (
+            {"temperature": temperature}
+            if temperature is not None
+            else get_llm_init_kwargs(self.settings, provider_supports_temperature=True)
+        )
         try:
             response = await self.reasoning_client.chat.completions.create(
                 model=self.settings.vllm_reasoning_model,
                 messages=messages,
                 max_tokens=max_tokens,
-                temperature=temperature,
+                **temp_kwargs,
             )
             
             content = response.choices[0].message.content

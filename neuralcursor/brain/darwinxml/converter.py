@@ -6,7 +6,6 @@ Converts DarwinXML semantic annotations into Neo4j PARA nodes and relationships.
 
 import logging
 from typing import List, Optional
-from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -27,8 +26,6 @@ import sys
 sys.path.insert(0, '/workspace/src')
 from ingestion.docling.darwinxml_models import (
     DarwinXMLDocument,
-    DarwinAnnotation,
-    DarwinAttribute,
     AttributeType,
 )
 

@@ -100,7 +100,6 @@ class MemGPTAgent:
             if memory_type == "episodic":
                 # Save to MongoDB
                 from neuralcursor.brain.mongodb.client import ChatMessage
-                from datetime import datetime
 
                 # Create a chat message entry
                 message = ChatMessage(

@@ -1,0 +1,44 @@
+---
+description: Emit session updates to docs/changelog.md
+alwaysApply: true
+---
+
+# Changelog Updates
+
+## Rule
+
+**Always emit updates from the recent session to `docs/changelog.md`** when the session produced meaningful changes (new features, fixes, refactors, docs, or config updates).
+
+## Prerequisite
+
+**During standard development, always run the retro agent before updating the changelog:**
+
+1. Invoke `.cursor/agents/retro.md` (retrospective agent)
+2. Let it review the session, distill lessons, and update `AGENTS.md` (or closest agent file)
+3. Then append session updates to `docs/changelog.md`
+
+Order: **retro → changelog**.
+
+## When to Append
+
+- After completing a feature, fix, or refactor
+- After adding or modifying documentation
+- After config or dependency changes
+- After any multi-file change that warrants a record
+
+## Format
+
+Append a new dated entry under a "Recent Updates" or similar section:
+
+```markdown
+### [Date] - [Brief Title]
+
+- Bullet point describing change 1
+- Bullet point describing change 2
+```
+
+## Location
+
+- **Target file**: `docs/changelog.md`
+- Create the file and a basic structure if it does not exist
+- Add entries at the top of the recent section (newest first)

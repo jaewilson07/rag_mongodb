@@ -1,7 +1,7 @@
 """Context manager for autonomous context paging."""
 
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 
 from src.memory_gateway.gateway import MemoryGateway

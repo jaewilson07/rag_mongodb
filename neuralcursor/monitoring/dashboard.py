@@ -4,7 +4,6 @@ Real-time dashboard for monitoring NeuralCursor health.
 
 import asyncio
 from datetime import datetime
-from typing import Any
 
 from rich.console import Console
 from rich.layout import Layout

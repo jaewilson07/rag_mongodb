@@ -1,15 +1,16 @@
 """Main MongoDB RAG agent implementation with shared state."""
 
-from pydantic_ai import Agent, RunContext
-from pydantic import BaseModel, ConfigDict
-from typing import Optional
 from textwrap import dedent
+from typing import Optional
 
-from pydantic_ai.ag_ui import StateDeps
+from pydantic import BaseModel, ConfigDict
+from pydantic_ai import Agent, RunContext
 
-from .providers import get_llm_model
 from .dependencies import AgentDependencies
 from .prompts import MAIN_SYSTEM_PROMPT
+from .providers import get_llm_model
+from .retrieval.formatting import format_search_results
+from .self_corrective_rag import run_self_corrective_rag
 from .tools import (
     format_web_search_results,
     hybrid_search,
@@ -17,26 +18,21 @@ from .tools import (
     semantic_search,
     text_search,
 )
-from .retrieval.formatting import format_search_results
-from .self_corrective_rag import run_self_corrective_rag
 
 
 class RAGState(BaseModel):
     """Minimal shared state for the RAG agent."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     agent_deps: Optional[AgentDependencies] = None
 
 
-# Create the RAG agent with AGUI support
-rag_agent = Agent(
-    get_llm_model(),
-    deps_type=StateDeps[RAGState],
-    instructions=MAIN_SYSTEM_PROMPT
-)
+# Create the RAG agent
+rag_agent = Agent(get_llm_model(), deps_type=RAGState, system_prompt=MAIN_SYSTEM_PROMPT)
 
 
-@rag_agent.instructions
-async def rag_instructions(ctx: RunContext[StateDeps[RAGState]]) -> str:
+@rag_agent.system_prompt
+async def rag_instructions(ctx: RunContext[RAGState]) -> str:
     """Dynamic instructions for the RAG agent.
 
     Uses runtime context to reinforce tool usage and citation expectations.
@@ -56,7 +52,7 @@ async def rag_instructions(ctx: RunContext[StateDeps[RAGState]]) -> str:
 
 @rag_agent.tool
 async def self_corrective_rag(
-    ctx: RunContext[StateDeps[RAGState]],
+    ctx: RunContext[RAGState],
     question: str,
 ) -> str:
     """Run the self-corrective RAG workflow with feedback loops."""
@@ -79,7 +75,7 @@ async def self_corrective_rag(
 
 @rag_agent.tool
 async def web_search(
-    ctx: RunContext[StateDeps[RAGState]],
+    ctx: RunContext[RAGState],
     query: str,
     result_count: Optional[int] = 5,
     categories: Optional[str] = None,
@@ -111,10 +107,10 @@ async def web_search(
 
 @rag_agent.tool
 async def search_knowledge_base(
-    ctx: RunContext[StateDeps[RAGState]],
+    ctx: RunContext[RAGState],
     query: str,
     match_count: Optional[int] = 5,
-    search_type: Optional[str] = "hybrid"
+    search_type: Optional[str] = "hybrid",
 ) -> str:
     """
     Search the knowledge base for relevant information.
@@ -150,21 +146,15 @@ async def search_knowledge_base(
         # Perform the search based on type
         if search_type == "hybrid":
             results = await hybrid_search(
-                ctx=deps_ctx,
-                query=query,
-                match_count=match_count
+                ctx=deps_ctx, query=query, match_count=match_count
             )
         elif search_type == "semantic":
             results = await semantic_search(
-                ctx=deps_ctx,
-                query=query,
-                match_count=match_count
+                ctx=deps_ctx, query=query, match_count=match_count
             )
         else:
             results = await text_search(
-                ctx=deps_ctx,
-                query=query,
-                match_count=match_count
+                ctx=deps_ctx, query=query, match_count=match_count
             )
 
         # Format results as a simple string with citations
@@ -175,7 +165,10 @@ async def search_knowledge_base(
                 result_count=match_count or 5,
             )
             if web_results:
-                return "RAG returned no results. Falling back to web search.\n\n" + format_web_search_results(web_results)
+                return (
+                    "RAG returned no results. Falling back to web search.\n\n"
+                    + format_web_search_results(web_results)
+                )
             if agent_deps.last_search_error:
                 return f"Search unavailable: {agent_deps.last_search_error}"
             return "No relevant information found in the knowledge base."

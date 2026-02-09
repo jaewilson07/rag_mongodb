@@ -297,7 +297,7 @@ async def main():
     }
     
     if not print_pre_flight_results(checks):
-        return 1
+        sys.exit(1)
 
     # Step 1: Deep database validation
     print("\nSTEP 1: Validating ingested data...")

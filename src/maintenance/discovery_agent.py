@@ -244,7 +244,7 @@ class DiscoveryAgent:
                     occurrences=reference_count,
                     projects=[],
                     entities=[{"resource": resource, "decisions": decision_names}],
-                    suggestion=f"This resource is highly influential. Consider adding to recommended reading.",
+                    suggestion="This resource is highly influential. Consider adding to recommended reading.",
                 )
             )
         

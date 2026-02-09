@@ -30,9 +30,9 @@ async def main() -> None:
     }
 
     if not print_pre_flight_results(checks):
-        return
+        sys.exit(1)
 
-    client = AsyncMongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+    client = AsyncMongoClient(settings.mongodb_connection_string, serverSelectionTimeoutMS=5000)
     db = client[settings.mongodb_database]
     chunks = db[settings.mongodb_collection_chunks]
 

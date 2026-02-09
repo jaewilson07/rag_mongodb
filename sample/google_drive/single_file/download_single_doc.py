@@ -68,7 +68,7 @@ async def main() -> None:
             "   3. Set GDOC_CLIENT, GDOC_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET in .env"
         )
         print("   See sample/google_drive/single_file/README.md for detailed setup")
-        return
+        sys.exit(1)
 
     service = GoogleDriveService(
         credentials_json=os.getenv("GDOC_CLIENT"),

@@ -1,7 +1,6 @@
 """MCP server implementation for NeuralCursor."""
 
 import logging
-import asyncio
 from typing import Optional
 
 from mcp.server import Server

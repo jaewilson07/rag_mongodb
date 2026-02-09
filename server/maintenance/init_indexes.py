@@ -8,10 +8,6 @@ from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-# Ensure local package imports work when running as a script.
-SRC_DIR = ROOT_DIR / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
 
 
 def _load_logging():
@@ -235,7 +231,9 @@ async def initialize_indexes(logger) -> bool:
     try:
         # Connect to MongoDB
         await logger.info("Connecting to MongoDB...")
-        client = AsyncMongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=10000)
+        client = AsyncMongoClient(
+            settings.mongodb_connection_string, serverSelectionTimeoutMS=10000
+        )
 
         # Verify connection
         await client.admin.command("ping")

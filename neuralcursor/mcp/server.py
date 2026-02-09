@@ -13,16 +13,17 @@ from typing import Any, Optional
 import websockets
 from websockets.server import WebSocketServerProtocol
 
-from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
-from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
 from neuralcursor.brain.memgpt.agent import MemGPTAgent
+from neuralcursor.brain.mongodb.client import MongoDBClient, MongoDBConfig
+from neuralcursor.brain.neo4j.client import Neo4jClient, Neo4jConfig
 from neuralcursor.settings import get_settings
+
 from .tools import (
+    FindRelationshipsRequest,
     MCPTools,
     QueryGraphRequest,
     RetrieveDecisionsRequest,
     SearchResourcesRequest,
-    FindRelationshipsRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class MCPServer:
 
             # Initialize MongoDB
             mongodb_config = MongoDBConfig(
-                uri=self.settings.mongodb_uri,
+                uri=self.settings.mongodb_connection_string,
                 database=self.settings.mongodb_database,
             )
             self.mongodb = MongoDBClient(mongodb_config)

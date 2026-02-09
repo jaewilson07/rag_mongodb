@@ -55,13 +55,20 @@ class GraphState(BaseModel):
     warning_banner: str = ""
 
 
-def build_chat_model(settings: Settings, temperature: float = 0.2) -> ChatOpenAI:
-    return ChatOpenAI(
-        model=settings.llm_model,
-        api_key=SecretStr(settings.llm_api_key),
-        base_url=settings.llm_base_url,
-        temperature=temperature,
-    )
+def build_chat_model(settings: Settings, temperature: float | None = None) -> ChatOpenAI:
+    """Build ChatOpenAI. Use temperature param for explicit override (e.g. 0.0 for verification).
+    Otherwise provider decides (OpenRouter omits, vLLM/Ollama include when set)."""
+    from mdrag.llm.completion_client import get_llm_init_kwargs
+    kwargs: dict = {
+        "model": settings.llm_model,
+        "api_key": SecretStr(settings.llm_api_key),
+        "base_url": settings.llm_base_url,
+    }
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    else:
+        kwargs.update(get_llm_init_kwargs(settings))
+    return ChatOpenAI(**kwargs)
 
 
 def atlas_results_to_documents(results: List[SearchResult]) -> List[SourceDocument]:
@@ -155,7 +162,7 @@ def _content_to_text(content: Any) -> str:
 
 
 async def rewrite_query(question: str, prior_queries: List[str], settings: Settings) -> str:
-    model = build_chat_model(settings=settings, temperature=0.2)
+    model = build_chat_model(settings=settings)
     prompt = QUERY_REWRITE_PROMPT.format(
         question=question,
         prior_queries="; ".join(prior_queries) if prior_queries else "(none)",
@@ -172,7 +179,7 @@ async def grade_relevance(
     if not documents:
         return False
 
-    model = build_chat_model(settings=settings, temperature=0.0)
+    model = build_chat_model(settings=settings, temperature=0.0)  # Deterministic for verification
     prompt = RELEVANCE_GRADER_PROMPT.format(
         question=question,
         context=format_context(documents),
@@ -187,7 +194,7 @@ async def generate_answer(
     documents: List[SourceDocument],
     settings: Settings,
 ) -> str:
-    model = build_chat_model(settings=settings, temperature=0.2)
+    model = build_chat_model(settings=settings)
     prompt = GENERATION_PROMPT.format(
         question=question,
         context=format_context(documents),
@@ -215,7 +222,7 @@ async def verify_citations(
     if not _has_valid_citations(answer, documents):
         return False
 
-    model = build_chat_model(settings=settings, temperature=0.0)
+    model = build_chat_model(settings=settings, temperature=0.0)  # Deterministic for verification
     prompt = CITATION_VERIFIER_PROMPT.format(
         question=question,
         answer=answer,

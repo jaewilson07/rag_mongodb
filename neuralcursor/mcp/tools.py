@@ -13,10 +13,10 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from neuralcursor.brain.memgpt.agent import MemGPTAgent
+from neuralcursor.brain.mongodb.client import MongoDBClient
 from neuralcursor.brain.neo4j.client import Neo4jClient
 from neuralcursor.brain.neo4j.models import RelationType
-from neuralcursor.brain.mongodb.client import MongoDBClient
-from neuralcursor.brain.memgpt.agent import MemGPTAgent
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class MCPTools:
     ):
         """
         Initialize MCP tools.
-        
+
         Args:
             neo4j_client: Neo4j client
             mongodb_client: MongoDB client
@@ -86,12 +86,12 @@ class MCPTools:
     ) -> dict[str, Any]:
         """
         Query the architectural knowledge graph.
-        
+
         Returns nodes and relationships matching the query in Mermaid format.
-        
+
         Args:
             request: Query request
-            
+
         Returns:
             Graph data in various formats
         """
@@ -105,7 +105,8 @@ class MCPTools:
             # Add node type filter if specified
             if request.node_types:
                 labels = "|".join(request.node_types)
-                cypher += f" WHERE any(label IN labels(node) WHERE label IN [{','.join([f\"'{t}'\" for t in request.node_types])}])"
+                quoted_types = [f"'{t}'" for t in request.node_types]
+                cypher += f" WHERE any(label IN labels(node) WHERE label IN [{','.join(quoted_types)}])"
 
             cypher += """
             RETURN properties(node) as props, labels(node) as labels, score
@@ -154,10 +155,10 @@ class MCPTools:
     ) -> dict[str, Any]:
         """
         Retrieve past architectural decisions related to context.
-        
+
         Args:
             request: Decision retrieval request
-            
+
         Returns:
             List of relevant decisions with rationale
         """
@@ -204,15 +205,13 @@ class MCPTools:
             logger.exception("mcp_retrieve_decisions_failed", extra={"error": str(e)})
             return {"error": str(e), "decisions": [], "count": 0}
 
-    async def search_resources(
-        self, request: SearchResourcesRequest
-    ) -> dict[str, Any]:
+    async def search_resources(self, request: SearchResourcesRequest) -> dict[str, Any]:
         """
         Search external resources (YouTube, articles, docs).
-        
+
         Args:
             request: Resource search request
-            
+
         Returns:
             List of relevant resources with summaries
         """
@@ -220,7 +219,9 @@ class MCPTools:
             # Search MongoDB resources
             resources = await self.mongodb.search_resources(
                 query=request.query,
-                resource_type=request.resource_types[0] if request.resource_types else None,
+                resource_type=request.resource_types[0]
+                if request.resource_types
+                else None,
                 limit=request.limit,
             )
 
@@ -256,12 +257,12 @@ class MCPTools:
     ) -> dict[str, Any]:
         """
         Find relationships for a code entity or file.
-        
+
         Shows dependencies, implementations, and related decisions.
-        
+
         Args:
             request: Relationship finding request
-            
+
         Returns:
             Graph of relationships
         """
@@ -329,10 +330,10 @@ class MCPTools:
     def _generate_mermaid(self, nodes: list[dict[str, Any]]) -> str:
         """
         Generate Mermaid diagram from nodes.
-        
+
         Args:
             nodes: List of node dictionaries
-            
+
         Returns:
             Mermaid markdown string
         """
@@ -366,15 +367,13 @@ class MCPTools:
 
         return "\n".join(mermaid_lines)
 
-    def _generate_relationship_mermaid(
-        self, paths: list[dict[str, Any]]
-    ) -> str:
+    def _generate_relationship_mermaid(self, paths: list[dict[str, Any]]) -> str:
         """
         Generate Mermaid diagram from relationship paths.
-        
+
         Args:
             paths: List of path dictionaries
-            
+
         Returns:
             Mermaid markdown string
         """
