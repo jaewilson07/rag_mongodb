@@ -111,12 +111,12 @@ See also: [docs/design_patterns.md](docs/design_patterns.md)
 ```mermaid
 flowchart TB
    root[MongoDB-RAG-Agent/]
-   root --> src[src/ - core runtime + ingestion + integrations]
+   root --> src[src/ - core runtime + ingestion + integrations + server]
+   root --> frontend[frontend/ - Next.js wiki + crawler + readings UI]
    root --> docs[docs/ - design docs]
    root --> sample[sample/ - reference scripts]
    root --> tests[tests/ - validation tests]
    root --> server[server/ - maintenance scripts]
-   root --> scripts[scripts/ - maintenance (avoid modifying)]
    root --> data[data/ - local data cache]
 
    root --> docker[docker + runtime]
@@ -128,6 +128,68 @@ flowchart TB
    config --> readme[README.md]
    config --> pyproject[pyproject.toml]
    config --> agents[AGENTS.md]
+```
+
+## Full System Architecture
+
+```mermaid
+flowchart TD
+   subgraph Frontend["frontend/ (Next.js PWA)"]
+      WIKI_UI[Wiki Generator + Viewer]
+      CRAWLER_UI[Web Crawler UI]
+      SAVE_UI[Save & Research - Android Share Target]
+      READINGS_UI[Readings Browser]
+   end
+
+   subgraph Server["src/server/ (FastAPI)"]
+      WIKI_API[Wiki API - structure, generate, chat]
+      READINGS_API[Readings API - save, list, detail]
+      INGEST_API[Ingest API - web, drive, upload]
+      QUERY_API[Query API - grounded RAG]
+   end
+
+   subgraph Integrations["src/integrations/"]
+      CRAWL4AI[Crawl4AI - headless browser]
+      YOUTUBE[YouTube - transcript + metadata]
+      GDRIVE[Google Drive/Docs]
+      SEARXNG[SearXNG - web search]
+   end
+
+   subgraph Core["src/ (core)"]
+      AGENT[Pydantic AI Agent]
+      TOOLS[Search Tools - semantic, text, hybrid]
+      SCRRAG[Self-Corrective RAG]
+      DEPS[AgentDependencies - MongoDB, Embeddings]
+   end
+
+   subgraph Ingestion["src/ingestion/"]
+      COLLECT[Source Collectors]
+      DOCLING[Docling Processor + Chunker]
+      EMBED[Embedding Generator]
+      STORAGE[MongoDB Storage Adapter]
+   end
+
+   subgraph Data["Data Stores"]
+      MONGO[(MongoDB Atlas)]
+      REDIS[(Redis Job Queue)]
+   end
+
+   Frontend --> Server
+   WIKI_API --> TOOLS
+   READINGS_API --> CRAWL4AI
+   READINGS_API --> YOUTUBE
+   READINGS_API --> SEARXNG
+   QUERY_API --> SCRRAG
+   INGEST_API --> COLLECT
+   COLLECT --> CRAWL4AI
+   COLLECT --> GDRIVE
+   COLLECT --> DOCLING
+   DOCLING --> EMBED
+   EMBED --> STORAGE
+   STORAGE --> MONGO
+   TOOLS --> MONGO
+   DEPS --> MONGO
+   INGEST_API --> REDIS
 ```
 
 
@@ -187,10 +249,34 @@ Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
 ### Stack-Level Documentation
 - src/AGENTS.md - core runtime, tools, CLI patterns
 - src/ingestion/AGENTS.md - ingestion and chunking pipeline
+- src/server/AGENTS.md - FastAPI server, API routes, services
+- frontend/AGENTS.md - Next.js PWA, pages, components
+
+### Module-Level Documentation
+- src/integrations/AGENTS.md - all external service adapters
+- src/integrations/crawl4ai/AGENTS.md - headless browser crawling
+- src/integrations/youtube/AGENTS.md - YouTube transcript + metadata
+- src/integrations/google_drive/AGENTS.md - Google Drive/Docs export
+- src/retrieval/AGENTS.md - embeddings, vector store, formatting
+- src/query/AGENTS.md - grounded query with citation verification
+- src/observability/AGENTS.md - PII redaction, tracing
+- src/mdrag_logging/AGENTS.md - async logging, decorators
+- src/server/api/wiki/AGENTS.md - wiki generation endpoints
+- src/server/api/readings/AGENTS.md - save-and-research endpoints
 
 ### Component-Level Documentation
-- examples/AGENTS.md - reference-only patterns
-- test_scripts/AGENTS.md - validation and smoke tests
+- server/maintenance/AGENTS.md - index initialization
+- sample/AGENTS.md - validation and reference scripts
+
+### YouTube and Readings Patterns
+When: saving URLs (web pages, YouTube videos, tweets).
+Pattern: `ReadingsService.save_reading()` detects URL type via `is_youtube_url()` and routes to the correct extractor. YouTube uses `YouTubeExtractor` for transcript + metadata; web uses Crawl4AI with httpx fallback.
+Anti-pattern: Hardcoding URL handling without media-type detection.
+
+### Wiki Generation from Ingested Data
+When: generating knowledge wikis from MongoDB documents.
+Pattern: `WikiService.generate_structure()` discovers documents, uses LLM to organize into sections/pages. Content is generated on-demand via streaming.
+Anti-pattern: Pre-generating all page content upfront (slow, wastes tokens).
 
 ## Search Hints
 
@@ -205,6 +291,15 @@ Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
 
 # Find Google Drive integration
 - /bin/grep -R "class GoogleDriveClient" -n src
+
+# Find YouTube extraction
+- /bin/grep -R "class YouTubeExtractor" -n src
+
+# Find Readings save pipeline
+- /bin/grep -R "class ReadingsService" -n src
+
+# Find Wiki generation
+- /bin/grep -R "class WikiService" -n src
 
 # Find dependencies
 - /bin/grep -R "class AgentDependencies" -n src
@@ -232,3 +327,8 @@ Anti-pattern: per-module logging.basicConfig calls with inconsistent formats.
 4. Examples folder is reference-only and should not be modified.
 5. Ingestion is non-destructive by default; use `--clean` to wipe collections.
 6. Crawl4AI requires the crawl4ai package (and Playwright runtime when crawling).
+7. YouTube transcript extraction is synchronous — always wrap in `asyncio.to_thread()`.
+8. The frontend is a PWA; `manifest.json` must be served at `/manifest.json` for Android Share Target to work.
+9. Wiki structure LLM calls can return invalid JSON — always have a `_fallback_structure()`.
+10. `ReadingsService` stores full content in MongoDB but excludes it from API responses (`full_content` field popped before return).
+11. Frontend API routes are proxies to the backend; keep them thin (fetch + forward).
