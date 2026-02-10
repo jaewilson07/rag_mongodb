@@ -9,7 +9,6 @@ from pydantic_ai import Agent, RunContext
 from mdrag.capabilities.retrieval.formatting import format_search_results
 from mdrag.prompts import MAIN_SYSTEM_PROMPT
 from mdrag.integrations.llm.providers import get_llm_model
-from mdrag.self_corrective_rag import run_self_corrective_rag
 from mdrag.workflows.rag.dependencies import AgentDependencies
 from mdrag.workflows.rag.tools import (
     format_web_search_results,
@@ -56,6 +55,8 @@ async def self_corrective_rag(
     question: str,
 ) -> str:
     """Run the self-corrective RAG workflow with feedback loops."""
+    from mdrag.self_corrective_rag import run_self_corrective_rag
+
     state = ctx.deps.state
     if state.agent_deps is None:
         state.agent_deps = AgentDependencies()
