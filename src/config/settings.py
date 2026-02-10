@@ -138,6 +138,43 @@ class Settings(BaseSettings):
         default=True, description="Crawl4AI remove base64 images"
     )
 
+    # SearXNG Configuration
+    searxng_url: str = Field(
+        default="http://localhost:7080", description="SearXNG base URL"
+    )
+
+    # RAG Pipeline Configuration
+    default_match_count: int = Field(
+        default=10, description="Default number of search results to return"
+    )
+    max_match_count: int = Field(
+        default=50, description="Maximum number of search results allowed"
+    )
+    default_text_weight: float = Field(
+        default=0.3, description="Default weight for text search in hybrid search"
+    )
+    rag_max_iterations: int = Field(
+        default=2, description="Maximum iterations for self-corrective RAG"
+    )
+    rag_max_generation_attempts: int = Field(
+        default=2, description="Maximum generation attempts for self-corrective RAG"
+    )
+    rag_web_result_count: int = Field(
+        default=5, description="Number of web search results to fetch"
+    )
+    rag_citation_soft_fail_banner: str = Field(
+        default="⚠️ Unable to fully verify citations.",
+        description="Warning message when citations cannot be verified",
+    )
+
+    # Google Drive Configuration
+    google_service_account_file: Optional[str] = Field(
+        default=None, description="Path to Google service account JSON file"
+    )
+    google_impersonate_subject: Optional[str] = Field(
+        default=None, description="Email to impersonate for Google Drive access"
+    )
+
 
 @functools.lru_cache(maxsize=1)
 def load_settings() -> Settings:
