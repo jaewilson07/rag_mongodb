@@ -13,8 +13,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mdrag.settings import load_settings
-from mdrag.validation import (
+from mdrag.config.settings import load_settings
+from mdrag.core.validation import (
     ValidationError,
     validate_neo4j,
     validate_rq_workers,

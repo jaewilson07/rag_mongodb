@@ -8,7 +8,7 @@ import re
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from mdrag.capabilities.memory.gateway import MemoryGateway
 from mdrag.capabilities.memory.models import MemoryRequest, MemoryType, MemoryOperation
 from mdrag.integrations.neo4j.models import (

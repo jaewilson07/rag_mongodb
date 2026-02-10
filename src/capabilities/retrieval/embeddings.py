@@ -7,7 +7,7 @@ import logging
 
 import openai
 
-from mdrag.settings import Settings, load_settings
+from mdrag.config.settings import Settings, load_settings
 
 logger = logging.getLogger(__name__)
 

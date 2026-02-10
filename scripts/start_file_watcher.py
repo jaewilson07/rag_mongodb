@@ -7,8 +7,8 @@ import sys
 
 from mdrag.file_watcher import FileWatcher
 from mdrag.capabilities.memory import MemoryGateway
-from mdrag.settings import load_settings
-from mdrag.validation import ValidationError, validate_neo4j
+from mdrag.config.settings import load_settings
+from mdrag.core.validation import ValidationError, validate_neo4j
 
 logging.basicConfig(
     level=logging.INFO,

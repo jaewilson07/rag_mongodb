@@ -5,7 +5,7 @@ import asyncio
 import logging
 import sys
 
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 from mdrag.integrations.neo4j.client import Neo4jClient
 from mdrag.capabilities.memory import MemoryGateway
 from mdrag.integrations.llm.vram_monitor import VRAMMonitor, create_vram_dashboard_html

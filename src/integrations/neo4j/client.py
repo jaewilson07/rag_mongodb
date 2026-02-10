@@ -8,7 +8,7 @@ import uuid as uuid_lib
 from neo4j import AsyncGraphDatabase, AsyncDriver
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from .models import (
     GraphNode,
     Project,

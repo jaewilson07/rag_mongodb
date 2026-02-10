@@ -18,9 +18,8 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from mdrag.agent import RAGState, rag_agent
-from mdrag.dependencies import AgentDependencies
-from mdrag.logging_config import configure_logging
-from mdrag.settings import load_settings
+from mdrag.workflows.rag.dependencies import AgentDependencies
+from mdrag.config.settings import load_settings
 
 load_dotenv(override=True)
 
@@ -155,7 +154,6 @@ def display_welcome():
 
 async def main():
     """Main conversation loop."""
-    configure_logging()
 
     try:
         await ensure_services_ready()

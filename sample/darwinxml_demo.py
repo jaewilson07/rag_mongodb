@@ -12,16 +12,16 @@ Shows how to:
 import asyncio
 from typing import List
 
-from mdrag.ingestion.docling.chunker import DoclingChunks
-from mdrag.ingestion.docling.darwinxml_models import (
+from mdrag.capabilities.ingestion.docling.chunker import DoclingChunks
+from mdrag.capabilities.ingestion.docling.darwinxml_models import (
     ValidationStatus,
 )
-from mdrag.ingestion.docling.darwinxml_validator import (
+from mdrag.capabilities.ingestion.docling.darwinxml_validator import (
     DarwinXMLValidator,
     validate_darwin_document,
 )
-from mdrag.ingestion.docling.darwinxml_wrapper import DarwinXMLWrapper
-from mdrag.ingestion.models import MetadataPassport
+from mdrag.capabilities.ingestion.docling.darwinxml_wrapper import DarwinXMLWrapper
+from mdrag.capabilities.ingestion.models import MetadataPassport
 from mdrag.integrations.models import SourceFrontmatter
 from mdrag.mdrag_logging.service_logging import get_logger, setup_logging
 

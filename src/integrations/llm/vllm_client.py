@@ -6,7 +6,7 @@ import httpx
 from openai import AsyncOpenAI
 
 from mdrag.integrations.llm.completion_client import get_llm_init_kwargs
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 

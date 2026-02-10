@@ -11,7 +11,7 @@ from pymongo.errors import ConnectionFailure, OperationFailure
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 
 
 async def create_vector_search_index(

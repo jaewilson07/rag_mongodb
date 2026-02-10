@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 import openai
 from openai import AsyncOpenAI
 
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 

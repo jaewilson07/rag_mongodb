@@ -13,7 +13,7 @@ from mdrag.capabilities.ingestion.models import (
 from mdrag.capabilities.ingestion.protocols import SourceCollector
 from mdrag.integrations.crawl4ai import Crawl4AIClient
 from mdrag.mdrag_logging.service_logging import get_logger
-from mdrag.settings import Settings, load_settings
+from mdrag.config.settings import Settings, load_settings
 
 logger = get_logger(__name__)
 

@@ -223,7 +223,7 @@ async def initialize_indexes(logger) -> bool:
     Returns:
         True if all indexes were created successfully, False otherwise
     """
-    from mdrag.settings import Settings  # type: ignore[reportMissingImports]
+    from mdrag.config.settings import Settings  # type: ignore[reportMissingImports]
 
     settings = Settings()
     client = None

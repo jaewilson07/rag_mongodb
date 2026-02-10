@@ -22,7 +22,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_ROOT / "src"))
 
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 
 # Collections required by the RAG system (from Settings)
 _REQUIRED_COLLECTIONS = [

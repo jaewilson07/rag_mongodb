@@ -48,8 +48,8 @@ from mdrag.capabilities.ingestion.sources import Crawl4AICollector, GoogleDriveC
 from mdrag.integrations.mongodb.adapters.storage import MongoStorageAdapter
 from mdrag.integrations.google_drive import parse_csv_values
 from mdrag.mdrag_logging.service_logging import get_logger, log_async, setup_logging
-from mdrag.settings import Settings, load_settings
-from mdrag.validation import ValidationError
+from mdrag.config.settings import Settings, load_settings
+from mdrag.core.validation import ValidationError
 from mdrag.capabilities.ingestion.validation import validate_ingestion
 
 load_dotenv()

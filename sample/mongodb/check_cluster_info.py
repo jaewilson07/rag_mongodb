@@ -2,7 +2,7 @@
 
 import asyncio
 
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 from pymongo import AsyncMongoClient
 
 

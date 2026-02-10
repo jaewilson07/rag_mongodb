@@ -1,8 +1,8 @@
 """Test that ingestion capabilities implement protocol contracts."""
 
-from mdrag.ingestion.docling.processor import DoclingProcessor
-from mdrag.ingestion.protocols import IngestionProcessor, SourceCollector, StorageAdapter
-from mdrag.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
+from mdrag.capabilities.ingestion.docling.processor import DoclingProcessor
+from mdrag.capabilities.ingestion.protocols import IngestionProcessor, SourceCollector, StorageAdapter
+from mdrag.capabilities.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
 from mdrag.integrations.mongodb.adapters.storage import MongoStorageAdapter
 
 

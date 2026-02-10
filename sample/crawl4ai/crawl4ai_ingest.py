@@ -18,10 +18,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from mdrag.ingestion.ingest import IngestionWorkflow
-from mdrag.ingestion.models import IngestionConfig, WebCollectionRequest
-from mdrag.ingestion.sources import Crawl4AICollector
-from mdrag.settings import load_settings
+from mdrag.capabilities.ingestion.ingest import IngestionWorkflow
+from mdrag.capabilities.ingestion.models import IngestionConfig, WebCollectionRequest
+from mdrag.capabilities.ingestion.sources import Crawl4AICollector
+from mdrag.config.settings import load_settings
 from utils import (
     check_api_keys,
     check_mongodb,

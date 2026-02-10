@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from mdrag.settings import Settings
-from mdrag.validation import (
+from mdrag.config.settings import Settings
+from mdrag.core.validation import (
     validate_embedding_api,
     validate_google_credentials,
     validate_llm_api,

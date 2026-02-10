@@ -20,11 +20,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from mdrag.ingestion.ingest import IngestionWorkflow
-from mdrag.ingestion.models import GoogleDriveCollectionRequest, IngestionConfig
-from mdrag.ingestion.sources import GoogleDriveCollector
+from mdrag.capabilities.ingestion.ingest import IngestionWorkflow
+from mdrag.capabilities.ingestion.models import GoogleDriveCollectionRequest, IngestionConfig
+from mdrag.capabilities.ingestion.sources import GoogleDriveCollector
 from mdrag.mdrag_logging.service_logging import get_logger
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 from utils import (
     check_api_keys,
     check_google_credentials,

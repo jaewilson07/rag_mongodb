@@ -27,7 +27,7 @@ from mdrag.capabilities.ingestion.models import (
     ingestion_timestamp,
 )
 from mdrag.mdrag_logging.service_logging import get_logger
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 
 logger = get_logger(__name__)
 

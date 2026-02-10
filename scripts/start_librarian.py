@@ -7,8 +7,8 @@ import sys
 
 from mdrag.librarian_agent import LibrarianAgent
 from mdrag.capabilities.memory import MemoryGateway
-from mdrag.settings import load_settings
-from mdrag.validation import ValidationError, validate_mongodb, validate_neo4j
+from mdrag.config.settings import load_settings
+from mdrag.core.validation import ValidationError, validate_mongodb, validate_neo4j
 
 logging.basicConfig(
     level=logging.INFO,

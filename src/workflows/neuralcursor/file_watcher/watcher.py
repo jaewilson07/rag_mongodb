@@ -9,7 +9,7 @@ from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileCreatedEvent
 
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from mdrag.capabilities.memory.gateway import MemoryGateway
 from mdrag.capabilities.memory.models import MemoryRequest, MemoryType, MemoryOperation
 from mdrag.integrations.neo4j.models import CodeEntity, NodeType

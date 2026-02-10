@@ -8,9 +8,9 @@ from typing import Any, Dict
 
 from rq import Queue
 
-from mdrag.ingestion.jobs import JobStore, process_ingestion_job
+from mdrag.capabilities.ingestion.jobs import JobStore, process_ingestion_job
 from mdrag.mdrag_logging.service_logging import get_logger, log_async
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 
 
 class IngestJobService:

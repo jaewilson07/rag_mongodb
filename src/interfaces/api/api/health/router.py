@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from mdrag.dependencies import AgentDependencies
+from mdrag.workflows.rag.dependencies import AgentDependencies
 from mdrag.mdrag_logging.service_logging import log_call
 from mdrag.interfaces.api.config import api_config
 

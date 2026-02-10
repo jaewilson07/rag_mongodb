@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from mdrag.query.service import QueryService
-from mdrag.settings import load_settings
+from mdrag.capabilities.query.service import QueryService
+from mdrag.config.settings import load_settings
 from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 DEFAULT_QUERY = "what is AI in domo"

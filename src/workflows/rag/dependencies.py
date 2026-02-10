@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from mdrag.integrations.llm.completion_client import LLMCompletionClient
 from mdrag.capabilities.retrieval.embeddings import EmbeddingClient
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 from mdrag.core.validation import ValidationError, validate_mongodb
 from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from bson import ObjectId
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from pymongo import AsyncMongoClient
 
 

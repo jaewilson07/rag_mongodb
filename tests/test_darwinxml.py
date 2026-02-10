@@ -7,7 +7,7 @@ full environment setup.
 
 
 # Import DarwinXML components
-from mdrag.ingestion.docling.darwinxml_models import (
+from mdrag.capabilities.ingestion.docling.darwinxml_models import (
     AnnotationType,
     AttributeType,
     DarwinAnnotation,

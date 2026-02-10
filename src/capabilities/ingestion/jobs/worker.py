@@ -8,7 +8,7 @@ from typing import Any, Dict
 from mdrag.capabilities.ingestion.jobs.store import JobStore
 from mdrag.capabilities.ingestion.jobs.service import IngestionService
 from mdrag.mdrag_logging.service_logging import get_logger, log_async
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 
 logger = get_logger(__name__)
 

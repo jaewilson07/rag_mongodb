@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from mdrag.validation import ValidationError, validate_mongodb, validate_neo4j
+from mdrag.core.validation import ValidationError, validate_mongodb, validate_neo4j
 
 from neuralcursor.brain.mongodb.client import ChatMessage, MongoDBClient
 from neuralcursor.brain.neo4j.client import Neo4jClient
@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
         
         # Validate vLLM if using local LLM endpoints (conditional on URLs being set)
         # NeuralCursor always configures LLM endpoints, so validate them
-        from mdrag.validation import validate_vllm
+        from mdrag.core.validation import validate_vllm
         try:
             validate_vllm(
                 settings.reasoning_llm_host,

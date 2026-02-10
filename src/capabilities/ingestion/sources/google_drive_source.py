@@ -20,7 +20,7 @@ from mdrag.integrations.google_drive import (
 )
 from mdrag.integrations.models import SourceFrontmatter
 from mdrag.mdrag_logging.service_logging import get_logger
-from mdrag.settings import Settings, load_settings
+from mdrag.config.settings import Settings, load_settings
 
 logger = get_logger(__name__)
 

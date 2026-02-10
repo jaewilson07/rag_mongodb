@@ -7,7 +7,7 @@ from datetime import datetime
 
 from mdrag.capabilities.ingestion.docling.chunker import DoclingChunks
 from mdrag.mdrag_logging.service_logging import get_logger
-from mdrag.settings import Settings, load_settings
+from mdrag.config.settings import Settings, load_settings
 from mdrag.capabilities.retrieval.embeddings import EmbeddingClient
 
 logger = get_logger(__name__)

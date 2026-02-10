@@ -5,15 +5,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from mdrag.dependencies import AgentDependencies
+from mdrag.workflows.rag.dependencies import AgentDependencies
 from mdrag.interfaces.api.api.feedback.router import feedback_router
 from mdrag.interfaces.api.api.health.router import health_router
 from mdrag.interfaces.api.api.ingest.router import ingest_router, jobs_router
 from mdrag.interfaces.api.api.query.router import query_router
 from mdrag.interfaces.api.api.readings.router import readings_router
 from mdrag.interfaces.api.api.wiki.router import wiki_router
-from mdrag.settings import load_settings
-from mdrag.validation import ValidationError, validate_rq_workers, validate_vllm
+from mdrag.config.settings import load_settings
+from mdrag.core.validation import ValidationError, validate_rq_workers, validate_vllm
 
 logger = logging.getLogger(__name__)
 

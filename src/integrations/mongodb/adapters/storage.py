@@ -18,7 +18,7 @@ from mdrag.capabilities.ingestion.models import (
 )
 from mdrag.capabilities.ingestion.protocols import StorageAdapter
 from mdrag.mdrag_logging.service_logging import get_logger
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from pymongo import AsyncMongoClient
 from pymongo.errors import (
     ConnectionFailure,

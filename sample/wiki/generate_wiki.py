@@ -24,9 +24,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from mdrag.logging_config import configure_logging
 from mdrag.interfaces.api.services.wiki import WikiService
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 
@@ -48,7 +47,6 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _run() -> None:
-    configure_logging()
     args = _parse_args()
 
     # Pre-flight checks

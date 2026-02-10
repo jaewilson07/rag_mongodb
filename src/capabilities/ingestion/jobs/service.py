@@ -19,7 +19,7 @@ from mdrag.capabilities.ingestion.models import (
 from mdrag.capabilities.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
 from mdrag.capabilities.ingestion.validation import validate_ingestion
 from mdrag.mdrag_logging.service_logging import get_logger, log_async
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 
 logger = get_logger(__name__)
 

@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from pymongo import AsyncMongoClient
 from pymongo.errors import (
     ConnectionFailure,

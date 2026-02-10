@@ -3,7 +3,7 @@
 from typing import Optional
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIModel
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 
 
 def get_llm_model(model_choice: Optional[str] = None) -> OpenAIModel:

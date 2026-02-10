@@ -18,10 +18,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from mdrag.ingestion.ingest import IngestionWorkflow
-from mdrag.ingestion.models import IngestionConfig, UploadCollectionRequest
-from mdrag.ingestion.sources import UploadCollector
-from mdrag.settings import load_settings
+from mdrag.capabilities.ingestion.ingest import IngestionWorkflow
+from mdrag.capabilities.ingestion.models import IngestionConfig, UploadCollectionRequest
+from mdrag.capabilities.ingestion.sources import UploadCollector
+from mdrag.config.settings import load_settings
 from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 DEFAULT_FILE = Path(__file__).resolve().parent / "pydantic.txt"

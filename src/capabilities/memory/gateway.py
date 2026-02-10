@@ -17,7 +17,7 @@ from mdrag.integrations.neo4j.models import (
     Resource,
 )
 from mdrag.integrations.neo4j.queries import SecondBrainQueries
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 
 from .models import (
     ArchitecturalContext,

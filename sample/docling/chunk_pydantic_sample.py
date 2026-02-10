@@ -13,11 +13,11 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from mdrag.ingestion.docling.chunker import ChunkingConfig, create_chunker
-from mdrag.ingestion.docling.processor import DoclingProcessor
-from mdrag.ingestion.models import IngestionDocument, Namespace, UploadCollectionRequest
-from mdrag.ingestion.sources.upload_source import UploadCollector
-from mdrag.settings import load_settings
+from mdrag.capabilities.ingestion.docling.chunker import ChunkingConfig, create_chunker
+from mdrag.capabilities.ingestion.docling.processor import DoclingProcessor
+from mdrag.capabilities.ingestion.models import IngestionDocument, Namespace, UploadCollectionRequest
+from mdrag.capabilities.ingestion.sources.upload_source import UploadCollector
+from mdrag.config.settings import load_settings
 
 
 def subset_markdown_by_headings(

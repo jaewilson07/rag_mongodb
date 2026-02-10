@@ -20,10 +20,10 @@ from urllib.parse import urlparse
 
 import httpx
 
-from mdrag.dependencies import AgentDependencies
-from mdrag.ingestion.validation import validate_readings
+from mdrag.workflows.rag.dependencies import AgentDependencies
+from mdrag.capabilities.ingestion.validation import validate_readings
 from mdrag.integrations.youtube import YouTubeExtractor, is_youtube_url
-from mdrag.validation import ValidationError
+from mdrag.core.validation import ValidationError
 
 logger = logging.getLogger(__name__)
 

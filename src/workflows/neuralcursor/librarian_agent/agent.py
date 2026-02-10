@@ -8,7 +8,7 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from mdrag.capabilities.memory.gateway import MemoryGateway
 from mdrag.capabilities.memory.models import MemoryRequest, MemoryType, MemoryOperation
 from .distiller import KnowledgeDistiller

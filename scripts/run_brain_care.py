@@ -5,7 +5,7 @@ import asyncio
 import logging
 import sys
 
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 from mdrag.capabilities.memory import MemoryGateway
 from mdrag.maintenance import GraphOptimizer, ConflictDetector, DiscoveryAgent
 

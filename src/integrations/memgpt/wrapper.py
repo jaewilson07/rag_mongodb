@@ -12,7 +12,7 @@ except ImportError:
     LETTA_AVAILABLE = False
 
 from mdrag.capabilities.memory.gateway import MemoryGateway
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 
 from .context_manager import ContextManager
 from .tools import MemoryTools

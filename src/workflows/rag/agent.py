@@ -8,7 +8,7 @@ from pydantic_ai import Agent, RunContext
 
 from mdrag.capabilities.retrieval.formatting import format_search_results
 from mdrag.prompts import MAIN_SYSTEM_PROMPT
-from mdrag.providers import get_llm_model
+from mdrag.integrations.llm.providers import get_llm_model
 from mdrag.self_corrective_rag import run_self_corrective_rag
 from mdrag.workflows.rag.dependencies import AgentDependencies
 from mdrag.workflows.rag.tools import (

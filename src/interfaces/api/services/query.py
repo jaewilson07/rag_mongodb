@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mdrag.query.service import QueryService
+from mdrag.capabilities.query.service import QueryService
 from mdrag.interfaces.api.api.query.models import QueryRequest, QueryResponse
 
 

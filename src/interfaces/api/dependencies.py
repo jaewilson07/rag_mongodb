@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from mdrag.dependencies import AgentDependencies
+from mdrag.workflows.rag.dependencies import AgentDependencies
 
 
 class ManagedDependencies:

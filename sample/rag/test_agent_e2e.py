@@ -17,7 +17,7 @@ from pydantic_ai.ag_ui import StateDeps
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from mdrag.agent import RAGState, rag_agent
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 from utils import check_api_keys, check_mongodb, print_pre_flight_results
 
 # Test queries covering different scenarios

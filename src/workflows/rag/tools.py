@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from pymongo.errors import OperationFailure
 
 from mdrag.workflows.rag.dependencies import AgentDependencies
-from mdrag.settings import load_settings
+from mdrag.config.settings import load_settings
 
 logger = logging.getLogger(__name__)
 

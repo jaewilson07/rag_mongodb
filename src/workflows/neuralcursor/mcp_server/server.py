@@ -6,7 +6,7 @@ from typing import Optional
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 
-from mdrag.settings import Settings
+from mdrag.config.settings import Settings
 from mdrag.capabilities.memory.gateway import MemoryGateway
 from .tools import MCPTools
 

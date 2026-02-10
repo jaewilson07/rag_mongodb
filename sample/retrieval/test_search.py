@@ -14,9 +14,9 @@ import asyncio
 import sys
 from pathlib import Path
 
-from mdrag.dependencies import AgentDependencies
-from mdrag.settings import load_settings
-from mdrag.tools import hybrid_search, semantic_search
+from mdrag.workflows.rag.dependencies import AgentDependencies
+from mdrag.config.settings import load_settings
+from mdrag.workflows.rag.tools import hybrid_search, semantic_search
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils import check_api_keys, check_mongodb, print_pre_flight_results
