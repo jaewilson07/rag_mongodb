@@ -386,6 +386,9 @@ If the content is empty or unclear, provide your best assessment based on the UR
 Return ONLY valid JSON."""
 
         try:
+            logger.debug(
+                f"Generating summary for {url} (title: {title[:50]})"
+            )
             response = await self.deps.llm_client.create(
                 messages=[
                     {
@@ -408,7 +411,18 @@ Return ONLY valid JSON."""
             return json.loads(result_text)
 
         except Exception as e:
-            logger.error("Summary generation failed: %s", str(e))
+            import traceback
+            error_context = (
+                f"Summary generation failed:\n"
+                f"  URL: {url}\n"
+                f"  Title: {title[:50]}\n"
+                f"  Error Type: {type(e).__name__}\n"
+                f"  Error Message: {str(e)}\n"
+                f"  LLM Provider: {self.deps.settings.llm_provider if self.deps.settings else 'unknown'}\n"
+                f"  LLM Base URL: {self.deps.settings.llm_base_url if self.deps.settings else 'unknown'}\n"
+                f"  Traceback: {traceback.format_exc()}"
+            )
+            logger.error(error_context)
             return {
                 "summary": f"Saved from {urlparse(url).netloc}: {title}",
                 "key_points": [title],
