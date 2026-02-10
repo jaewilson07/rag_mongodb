@@ -4,15 +4,10 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.settings import load_settings
-from src.memory_gateway.gateway import MemoryGateway
-from src.maintenance.graph_optimizer import GraphOptimizer
-from src.maintenance.conflict_detector import ConflictDetector
-from src.maintenance.discovery_agent import DiscoveryAgent
+from mdrag.settings import load_settings
+from mdrag.capabilities.memory import MemoryGateway
+from mdrag.maintenance import GraphOptimizer, ConflictDetector, DiscoveryAgent
 
 logging.basicConfig(
     level=logging.INFO,

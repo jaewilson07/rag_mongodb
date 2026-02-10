@@ -1,7 +1,5 @@
-"""Collection sources for ingestion workflows."""
+"""Ingestion sources compatibility redirect."""
 
-from .crawl4ai_source import Crawl4AICollector
-from .google_drive_source import GoogleDriveCollector
-from .upload_source import UploadCollector
+from mdrag.capabilities.ingestion.sources import *
 
 __all__ = ["Crawl4AICollector", "GoogleDriveCollector", "UploadCollector"]

@@ -131,7 +131,7 @@ async with MemoryGateway(settings) as gateway:
 
 ### 2. MCP Server
 
-**Location**: `src/mcp_server/`
+**Location**: `src/workflows/neuralcursor/mcp_server/` (canonical); `src/mcp_server/` re-exports for backward compat.
 
 Exposes 6 tools to Cursor IDE via Model Context Protocol:
 
@@ -144,7 +144,7 @@ Exposes 6 tools to Cursor IDE via Model Context Protocol:
 
 **Start MCP Server:**
 ```bash
-python scripts/start_mcp_server.py
+uv run python scripts/start_mcp_server.py
 ```
 
 ### 3. MemGPT Integration
@@ -159,7 +159,7 @@ Stateful context management with:
 
 ### 4. Librarian Agent
 
-**Location**: `src/librarian_agent/`
+**Location**: `src/workflows/neuralcursor/librarian_agent/` (canonical); `src/librarian_agent/` re-exports.
 
 LangGraph-based agent that:
 - Monitors MongoDB for unprocessed episodic memories
@@ -169,12 +169,12 @@ LangGraph-based agent that:
 
 **Start Librarian:**
 ```bash
-python scripts/start_librarian.py
+uv run python scripts/start_librarian.py
 ```
 
 ### 5. File Watcher
 
-**Location**: `src/file_watcher/`
+**Location**: `src/workflows/neuralcursor/file_watcher/` (canonical); `src/file_watcher/` re-exports.
 
 Monitors filesystem and automatically:
 - Parses Python files via AST
@@ -184,12 +184,12 @@ Monitors filesystem and automatically:
 
 **Start File Watcher:**
 ```bash
-python scripts/start_file_watcher.py
+uv run python scripts/start_file_watcher.py
 ```
 
 ### 6. Maintenance Tools
 
-**Location**: `src/maintenance/`
+**Location**: `src/workflows/neuralcursor/maintenance/` (canonical); `src/maintenance/` re-exports.
 
 Brain Care routine for graph health:
 
@@ -199,7 +199,7 @@ Brain Care routine for graph health:
 
 **Run Brain Care:**
 ```bash
-python scripts/run_brain_care.py
+uv run python scripts/run_brain_care.py
 ```
 
 ### 7. VRAM Monitor (Optional)
@@ -247,7 +247,7 @@ Decisions are automatically captured by:
 
 ```bash
 # Visual dashboard
-open src/context_dashboard/dashboard.html
+open frontend/public/context-dashboard.html
 
 # VRAM monitor (if using local LLMs)
 open data/vram_dashboard.html
@@ -344,10 +344,10 @@ This will:
 
 ```bash
 # Graph statistics
-python -m src.mcp_server.tools get_graph_statistics
+uv run python -c "from mdrag.mcp_server import MCPTools; ..."  # or use MCP from Cursor
 
 # Active context
-python -m src.mcp_server.tools get_active_project_context
+# Use MCP tools from Cursor IDE (query_architectural_graph, get_active_project_context, etc.)
 ```
 
 ## Troubleshooting
@@ -379,7 +379,7 @@ print(client.admin.command('ping'))
 ps aux | grep start_mcp_server
 
 # Restart server
-python scripts/start_mcp_server.py
+uv run python scripts/start_mcp_server.py
 ```
 
 ## Project Structure
@@ -389,14 +389,15 @@ neuralcursor/
 ├── src/
 │   ├── integrations/
 │   │   └── neo4j/          # Neo4j client, schema, models, queries
-│   ├── memory_gateway/     # Unified Neo4j + MongoDB interface
-│   ├── mcp_server/         # MCP server and tools
-│   ├── memgpt_integration/ # MemGPT wrapper and context manager
-│   ├── librarian_agent/    # Knowledge distillation agent
-│   ├── file_watcher/       # AST parser and file monitor
+│   ├── capabilities/memory/      # Unified Neo4j + MongoDB (MemoryGateway)
+│   ├── workflows/neuralcursor/   # MCP server, file watcher, librarian, maintenance (canonical)
+│   ├── mcp_server/         # Re-exports from workflows.neuralcursor.mcp_server
+│   ├── memgpt_integration/ # MemGPT wrapper and context manager (integrations/memgpt)
+│   ├── librarian_agent/    # Re-exports from workflows.neuralcursor.librarian_agent
+│   ├── file_watcher/       # Re-exports from workflows.neuralcursor.file_watcher
 │   ├── llm/                # vLLM config and VRAM monitor
-│   ├── maintenance/        # Graph optimizer, conflict detector, discovery
-│   └── context_dashboard/  # Visual context dashboard
+│   ├── maintenance/        # Re-exports from workflows.neuralcursor.maintenance
+│   └── frontend/public/context-dashboard.html  # Visual context dashboard
 ├── scripts/
 │   ├── init_neuralcursor.py      # Initialize system
 │   ├── start_mcp_server.py       # Start MCP server

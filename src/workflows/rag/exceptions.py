@@ -6,7 +6,7 @@ from mdrag.core.exceptions import MDRAGException
 
 
 class RAGError(MDRAGException):
-    """Raised when RAG workflow fails (agent, tools, dependencies)."""
+    """Raised when RAG agent, tools, or dependency wiring fails."""
 
     pass
 

@@ -49,7 +49,7 @@ USER app
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import src.cli"
+    CMD python -c "import mdrag.cli"
 
 # Default command (can be overridden in docker-compose)
-CMD ["python", "-m", "src.cli"]
+CMD ["python", "-m", "mdrag.cli"]

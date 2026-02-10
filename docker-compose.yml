@@ -2,7 +2,7 @@ name: ragagent
 
 include:
   - docker-compose.vllm.yml
-  # - docker-compose.vllm.48gb.yml
+  # - docker-compose.vllm.48gb.yml  # Use quantized model for 2x3090 (48GB VRAM)
 
 services:
   atlas-local:
@@ -93,7 +93,7 @@ services:
       - rag_network
     stdin_open: true
     tty: true
-    command: ["sh", "-c", "python server/maintenance/init_indexes.py && python -m src.cli"]
+    command: ["sh", "-c", "python server/maintenance/init_indexes.py && python -m mdrag.cli"]
     restart: unless-stopped
 
   wiki-frontend:

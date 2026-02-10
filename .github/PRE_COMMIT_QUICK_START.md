@@ -2,7 +2,7 @@
 
 ## First Time Setup
 ```bash
-# Already done during uv sync --group dev
+# Already done during uv sync --group development
 uv run pre-commit install
 ```
 

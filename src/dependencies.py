@@ -1,4 +1,4 @@
-"""Backward compatibility: re-export from mdrag.workflows.rag.dependencies."""
+"""Dependencies compatibility shim - re-exports from mdrag.workflows.rag.dependencies."""
 
 from mdrag.workflows.rag.dependencies import AgentDependencies
 

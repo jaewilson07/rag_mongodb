@@ -80,7 +80,7 @@ python neuralcursor/gateway/server.py
 
 **FastAPI Server:**
 ```bash
-uv run uvicorn src.server.main:app
+uv run uvicorn mdrag.interfaces.api.main:app
 # Validates: MongoDB (via AgentDependencies), RQ workers, vLLM (if enabled)
 ```
 

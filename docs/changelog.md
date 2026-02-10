@@ -6,6 +6,37 @@
 
 ## Recent Updates
 
+### 2026-02-09 - Removed Backward-Compat Stubs and Shims
+
+- **observability**: Deleted `src/observability/` (re-exports); imports updated to `mdrag.core.telemetry` in `interfaces/api/services/feedback.py` and `capabilities/query/service.py`.
+- **capabilities/ingestion/storage**: Deleted stub; test and code use `mdrag.integrations.mongodb.adapters.storage`.
+- **llm**: Deleted `src/llm/` (stubs and duplicate implementations); all imports updated to `mdrag.integrations.llm.*` (scripts, workflows/neuralcursor, workflows/rag, self_corrective_rag).
+- **server**: Deleted entire `src/server/` (duplicate of `interfaces/api`); sample scripts and docs now use `mdrag.interfaces.api.services.wiki`, `mdrag.interfaces.api.services.readings`, and `uv run uvicorn mdrag.interfaces.api.main:app`.
+
+### 2026-02-09 - Outstanding Plan Tasks (Workflows, CLI, MCP, Docker)
+
+- **Workflow exceptions**: Added `workflows/rag/exceptions.py` (RAGError), `workflows/wiki/exceptions.py` (WikiError), `workflows/readings/exceptions.py` (ReadingsError). Created `workflows/wiki/` and `workflows/readings/` package structure.
+- **RAG agent and tools in workflows**: Moved implementation to `workflows/rag/agent.py` and `workflows/rag/tools.py`; root `agent.py` and `tools.py` are backward-compat stubs re-exporting from `mdrag.workflows.rag`. Updated `workflows/rag/__init__.py` to export agent, tools, and exceptions.
+- **CLI under interfaces**: Added `interfaces/cli/cli.py` and `interfaces/cli/cli_langgraph.py` (canonical CLI); root `cli.py` and `cli_langgraph.py` now delegate to `mdrag.interfaces.cli.cli` and `mdrag.interfaces.cli.cli_langgraph`.
+- **MCP interface**: Added `interfaces/mcp/__init__.py` re-exporting `NeuralCursorMCPServer` and `MCPTools` from `mdrag.mcp_server`.
+- **Docker and docs**: `docker-compose.yml` and `Dockerfile` now use `python -m mdrag.cli`; `docs/deepwiki-frontend.md` recommends `uv run uvicorn mdrag.interfaces.api.main:app`.
+- **NeuralCursor move completed**: Moved `mcp_server`, `file_watcher`, `librarian_agent`, `maintenance` into `workflows/neuralcursor/`. Canonical code lives in `mdrag.workflows.neuralcursor.*`; root `mcp_server`, `file_watcher`, `librarian_agent`, `maintenance` are backward-compat stubs. Scripts (`start_mcp_server.py`, `start_librarian.py`, `start_file_watcher.py`, `init_neuralcursor.py`, `run_brain_care.py`) now use `mdrag.*` imports. Added `workflows/neuralcursor/exceptions.py` (NeuralCursorError). Fixed `integrations/neo4j/client.py` to use `mdrag.settings`.
+
+### 2026-02-09 - Phase 5 Cleanup (src/ Reorganization)
+
+- **UI artifacts moved out of src**: `ChatWindow.jsx` → `frontend/components/`, `dashboard.html` (NeuralCursor context dashboard) → `frontend/public/context-dashboard.html`. Removed `src/components/` and `src/context_dashboard/`.
+- **Removed src/mdrag/**: Documentation-only folder deleted; content duplicated in `src/AGENTS.md` and sub-AGENTS.md.
+- **Deleted duplicate legacy code**: Under redirect packages, removed duplicate files; kept only `__init__.py` stubs. Removed: `src/ingestion/` (docling, jobs, sources, embedder, ingest, models, protocols, storage, validation), `src/query/service.py`, `src/retrieval/` (embeddings, formatting, vector_store), `src/memory_gateway/` (gateway, models), `src/memgpt_integration/` (context_manager, tools, wrapper). Canonical code remains in `capabilities/` and `integrations/`.
+- **Canonical import fix**: `capabilities/ingestion/embedder.py` now imports from `mdrag.capabilities.ingestion.docling.chunker` instead of `mdrag.ingestion.docling.chunker` for internal use.
+- **workflows/rag restored**: Added `workflows/__init__.py`, `workflows/rag/__init__.py`, `workflows/rag/dependencies.py` (AgentDependencies) so `mdrag.dependencies` re-export works.
+- **Docs**: `NEURALCURSOR_README.md` updated to reference `frontend/public/context-dashboard.html`; root `AGENTS.md` reference to `src/mdrag/integrations/models.py` → `src/integrations/models.py`.
+
+### 2026-02-09 - Sample Script Fixes
+
+- **Namespace validation**: Fixed `ValidationError` in `chunk_pydantic_sample`, `docling_ingest`, and upload flow. `UploadCollector` and `DoclingProcessor` now convert namespace via `model_dump()` / `_to_namespace()` to avoid cross-module Pydantic type mismatch.
+- **darwinxml_demo**: Fixed `ColoredLogger.info()` duplicate `message` kwarg; added required `document_uid` to `MetadataPassport`; changed `document_id` → `document_uid` for `wrap_chunk()`; fixed `GraphTriple` access (use `.subject` / `.predicate` / `.object` instead of dict subscript).
+- **Samples verified**: `chunk_pydantic_sample`, `darwinxml_demo`, `youtube/extract_video`, `searxng/query_searxng` run successfully. MongoDB samples require running MongoDB; RAG/wiki/readings require MongoDB + Redis + API keys.
+
 ### 2026-02-09 - src/ Folder Reorganization (Layered Architecture)
 
 - **Phase 1 (Core)**: `core/` (exceptions, logging, telemetry, validation), `config/` (settings, validate_config). `MDRAGException` base; `ValidationError` subclasses it; `ConfigError` in config.

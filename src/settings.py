@@ -1,4 +1,4 @@
-"""Backward compatibility: re-export from mdrag.config.settings."""
+"""Settings compatibility shim - re-exports from mdrag.config.settings."""
 
 from mdrag.config.settings import Settings, load_settings
 

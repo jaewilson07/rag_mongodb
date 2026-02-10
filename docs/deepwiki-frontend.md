@@ -41,7 +41,7 @@ npm run dev
 
 The app runs at **http://localhost:3000**.
 
-Ensure the backend is running (`uv run uvicorn mdrag.server.main:app --host 0.0.0.0 --port 8000` or via Docker) before using the frontend.
+Ensure the backend is running (`uv run uvicorn mdrag.interfaces.api.main:app --host 0.0.0.0 --port 8000`, or via Docker) before using the frontend.
 
 ## Production / Docker
 

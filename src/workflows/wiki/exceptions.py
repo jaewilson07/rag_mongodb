@@ -6,7 +6,7 @@ from mdrag.core.exceptions import MDRAGException
 
 
 class WikiError(MDRAGException):
-    """Raised when wiki workflow fails (structure, streaming, page generation)."""
+    """Raised when wiki structure, streaming, or page generation fails."""
 
     pass
 

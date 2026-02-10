@@ -1,12 +1,10 @@
-"""Docling-powered ingestion helpers."""
+"""Docling compatibility redirect package."""
 
-from .chunker import ChunkingConfig, DoclingChunks, DoclingHierarchicalChunker, create_chunker
-from .processor import DoclingProcessor
+from mdrag.capabilities.ingestion.docling import *
 
 __all__ = [
     "ChunkingConfig",
     "DoclingChunks",
     "DoclingHierarchicalChunker",
     "create_chunker",
-    "DoclingProcessor",
 ]

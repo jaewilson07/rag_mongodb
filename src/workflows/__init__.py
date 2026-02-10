@@ -1,1 +1,1 @@
-"""Workflows: rag, wiki, readings, neuralcursor."""
+"""Workflows layer: RAG, wiki, readings orchestration."""

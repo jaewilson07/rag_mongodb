@@ -231,7 +231,7 @@ Anti-pattern: bypassing metadata extraction or skipping Docling conversion for f
 
 ### Integration Exports (Frontmatter)
 When: exporting markdown from integrations (Crawl4AI, Google Drive).
-Example: src/mdrag/integrations/models.py
+Example: src/integrations/models.py
 Anti-pattern: returning raw markdown without `ExtractFrontmatter`.
 
 ### Logging Configuration

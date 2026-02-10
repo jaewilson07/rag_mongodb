@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from mdrag.observability.pii import redact_text
+from mdrag.core.telemetry import redact_text
 from mdrag.interfaces.api.dependencies import ManagedDependencies
 
 

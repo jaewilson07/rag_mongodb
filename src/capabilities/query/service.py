@@ -8,10 +8,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from mdrag.dependencies import AgentDependencies
-from mdrag.observability.pii import redact_payload, redact_text
-from mdrag.observability.tracing import new_trace_id, start_span
-from mdrag.tools import hybrid_search, semantic_search, text_search
+from mdrag.workflows.rag.dependencies import AgentDependencies
+from mdrag.core.telemetry import redact_payload, redact_text, new_trace_id, start_span
+from mdrag.workflows.rag.tools import hybrid_search, semantic_search, text_search
 from mdrag.capabilities.retrieval.formatting import build_citations, build_prompt
 
 

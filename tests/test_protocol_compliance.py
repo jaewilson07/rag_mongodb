@@ -3,7 +3,7 @@
 from mdrag.ingestion.docling.processor import DoclingProcessor
 from mdrag.ingestion.protocols import IngestionProcessor, SourceCollector, StorageAdapter
 from mdrag.ingestion.sources import Crawl4AICollector, GoogleDriveCollector, UploadCollector
-from mdrag.ingestion.storage import MongoStorageAdapter
+from mdrag.integrations.mongodb.adapters.storage import MongoStorageAdapter
 
 
 def test_collectors_implement_protocol() -> None:

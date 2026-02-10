@@ -4,11 +4,11 @@ This project uses pre-commit hooks for automated linting, formatting, and securi
 
 ## Setup
 
-Pre-commit hooks are automatically installed when you run `uv sync --group dev`. To manually install:
+Pre-commit hooks are automatically installed when you run `uv sync --group development`. To manually install:
 
 ```bash
 # Install dependencies
-uv sync --group dev
+uv sync --group development
 
 # Install pre-commit hooks
 uv run pre-commit install
@@ -142,7 +142,7 @@ Pre-commit can run in CI/CD pipelines:
 # Example GitHub Actions workflow
 - name: Run pre-commit
   run: |
-    uv sync --group dev
+    uv sync --group development
     uv run pre-commit run --all-files
 ```
 

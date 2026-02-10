@@ -4,13 +4,10 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.mcp_server.server import NeuralCursorMCPServer
-from src.settings import load_settings
-from src.validation import ValidationError, validate_neo4j
+from mdrag.mcp_server import NeuralCursorMCPServer
+from mdrag.settings import load_settings
+from mdrag.validation import ValidationError, validate_neo4j
 
 logging.basicConfig(
     level=logging.INFO,

@@ -217,7 +217,7 @@ Neo4j validation failed:
 ### FastAPI Server (with RQ worker validation)
 
 ```bash
-$ uv run uvicorn src.server.main:app
+$ uv run uvicorn mdrag.interfaces.api.main:app
 
 # Without workers running:
 ERROR: RQ worker validation failed
@@ -233,7 +233,7 @@ ERROR: RQ worker validation failed
 uv run rq worker default --url redis://localhost:6379/0
 
 # Terminal 2: Start FastAPI (now succeeds)
-uv run uvicorn src.server.main:app
+uv run uvicorn mdrag.interfaces.api.main:app
 INFO: ✓ MongoDB validation passed
 INFO: ✓ RQ workers validation passed (1 worker on 'default' queue)
 INFO: Application startup complete

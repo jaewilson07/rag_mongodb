@@ -4,10 +4,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from mdrag.llm.completion_client import LLMCompletionClient
+from mdrag.integrations.llm.completion_client import LLMCompletionClient
 from mdrag.capabilities.retrieval.embeddings import EmbeddingClient
 from mdrag.settings import load_settings
-from mdrag.validation import ValidationError, validate_mongodb
+from mdrag.core.validation import ValidationError, validate_mongodb
 from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 
@@ -136,6 +136,6 @@ class AgentDependencies:
             query: Search query to add to history
         """
         self.query_history.append(query)
-        # Keep only last 10 queries
+        # Keep last 10 queries
         if len(self.query_history) > 10:
             self.query_history.pop(0)

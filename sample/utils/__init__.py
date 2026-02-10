@@ -113,6 +113,17 @@ async def _try_initiate_replica_set(uri: str) -> bool:
     return await asyncio.to_thread(_try_initiate_replica_set_sync, uri)
 
 
+def _uri_with_direct_connection_for_local(uri: str, is_local: bool) -> str:
+    """Add directConnection=true for local URIs to avoid replica set discovery.
+    When connecting from host to localhost:7017, the replica set config may list
+    unreachable hostnames (e.g. atlas-local:27017); directConnection bypasses
+    discovery and prevents 'replicaset members not found' errors."""
+    if not is_local or "directConnection=" in uri or "mongodb+srv" in uri:
+        return uri
+    sep = "&" if "?" in uri else "?"
+    return f"{uri}{sep}directConnection=true"
+
+
 def _uri_with_read_preference(uri: str) -> str:
     """Append readPreference=primaryPreferred for replica set compatibility.
     Skip when directConnection=true to avoid blocking on RSGhost/stale replica set."""
@@ -198,8 +209,11 @@ async def check_mongodb(
     Returns:
         Dictionary with status, message, and optional details
     """
-    uri = _uri_with_read_preference(settings.mongodb_connection_string)
     is_local = _is_local_mongodb_uri(settings.mongodb_connection_string)
+    uri = _uri_with_direct_connection_for_local(
+        settings.mongodb_connection_string, is_local
+    )
+    uri = _uri_with_read_preference(uri)
 
     async def _do_check() -> dict[str, Any]:
         client = AsyncMongoClient(uri, serverSelectionTimeoutMS=5000)

@@ -4,16 +4,12 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.settings import load_settings
-from src.integrations.neo4j.client import Neo4jClient
-from src.memory_gateway.gateway import MemoryGateway
-from src.llm.vram_monitor import VRAMMonitor, create_vram_dashboard_html
-from src.llm.vllm_config import VRAMMonitorConfig
+from mdrag.settings import load_settings
+from mdrag.integrations.neo4j.client import Neo4jClient
+from mdrag.capabilities.memory import MemoryGateway
+from mdrag.integrations.llm.vram_monitor import VRAMMonitor, create_vram_dashboard_html
+from mdrag.integrations.llm.vllm_config import VRAMMonitorConfig
 
 logging.basicConfig(
     level=logging.INFO,

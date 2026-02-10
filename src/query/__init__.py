@@ -1,7 +1,5 @@
-"""Backward compatibility: redirect to mdrag.capabilities.query."""
+"""Query compatibility redirect package."""
 
-import sys
+from mdrag.capabilities.query.service import QueryService
 
-from mdrag.capabilities import query as _query
-
-sys.modules["mdrag.query"] = _query
+__all__ = ["QueryService"]

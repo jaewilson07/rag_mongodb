@@ -10,9 +10,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
-from .dependencies import AgentDependencies
-from .mdrag_logging.service_logging import get_logger, log_async
-from .prompts import (
+from mdrag.workflows.rag.dependencies import AgentDependencies
+from mdrag.mdrag_logging.service_logging import get_logger, log_async
+from mdrag.prompts import (
     CITATION_VERIFIER_PROMPT,
     GENERATION_PROMPT,
     QUERY_REWRITE_PROMPT,
@@ -58,7 +58,7 @@ class GraphState(BaseModel):
 def build_chat_model(settings: Settings, temperature: float | None = None) -> ChatOpenAI:
     """Build ChatOpenAI. Use temperature param for explicit override (e.g. 0.0 for verification).
     Otherwise provider decides (OpenRouter omits, vLLM/Ollama include when set)."""
-    from mdrag.llm.completion_client import get_llm_init_kwargs
+    from mdrag.integrations.llm.completion_client import get_llm_init_kwargs
     kwargs: dict = {
         "model": settings.llm_model,
         "api_key": SecretStr(settings.llm_api_key),

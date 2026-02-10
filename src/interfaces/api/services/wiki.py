@@ -15,8 +15,8 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from mdrag.dependencies import AgentDependencies
-from mdrag.tools import SearchResult, hybrid_search
+from mdrag.workflows.rag.dependencies import AgentDependencies
+from mdrag.workflows.rag.tools import SearchResult, hybrid_search
 
 logger = logging.getLogger(__name__)
 
@@ -510,8 +510,11 @@ Respond with ONLY the JSON structure."""
             return structure
 
         except json.JSONDecodeError as e:
-            logger.error("Failed to parse LLM wiki structure: %s", str(e))
-            # Fallback: create a simple structure
+            logger.error(
+                "Failed to parse LLM wiki structure: %s. Content preview: %s",
+                str(e),
+                content[:500] if content else "",
+            )
             return self._fallback_structure(title, documents)
         except Exception as e:
             logger.exception("Error generating wiki structure: %s", str(e))

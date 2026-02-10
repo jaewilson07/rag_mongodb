@@ -115,7 +115,7 @@ Neo4j validation failed
 ### FastAPI Server (with vLLM enabled)
 
 ```bash
-$ uv run uvicorn src.server.main:app
+$ uv run uvicorn mdrag.interfaces.api.main:app
 
 INFO: ✓ MongoDB validation passed
 INFO: ✓ RQ workers validation passed (1 worker on 'default' queue)

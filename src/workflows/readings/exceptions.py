@@ -6,7 +6,7 @@ from mdrag.core.exceptions import MDRAGException
 
 
 class ReadingsError(MDRAGException):
-    """Raised when readings workflow fails (save-reading, extraction, research)."""
+    """Raised when save-reading, extraction, or research pipeline fails."""
 
     pass
 
