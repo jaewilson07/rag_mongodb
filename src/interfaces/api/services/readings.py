@@ -66,8 +66,7 @@ class ReadingsService:
         await self.initialize()
         settings = self.deps.settings
         url_type = "youtube" if is_youtube_url(url) else "web"
-        searxng_url = getattr(settings, "searxng_url", "http://localhost:7080")
-        await validate_readings(settings, url_type, searxng_url=searxng_url)
+        await validate_readings(settings, url_type, searxng_url=settings.searxng_url)
 
         try:
             reading_id = hashlib.md5(
@@ -150,6 +149,8 @@ class ReadingsService:
             reading_doc["ingestion_job_id"] = job_id
             reading_doc.pop("full_content", None)
             reading_doc["id"] = reading_doc.pop("_id")
+            if summary_data.get("summary_fallback"):
+                reading_doc["summary_fallback"] = True
 
             return reading_doc
 
@@ -412,6 +413,16 @@ Return ONLY valid JSON."""
 
         except Exception as e:
             import traceback
+            base_url = (self.deps.settings.llm_base_url or "") if self.deps.settings else ""
+
+            # Generate helpful hints based on configuration and error
+            if "11435" in base_url:
+                hint = "ERROR: Port 11435 is incorrect. See .env for valid options: 8000 (vLLM), 11434 (Ollama), or use cloud provider (OpenAI/OpenRouter)."
+            elif "localhost" in base_url or "127.0.0.1" in base_url:
+                hint = "Local LLM service not running. Start vLLM: docker-compose -f docker-compose.vllm.yml up -d, or Ollama: ollama serve, or use cloud provider."
+            else:
+                hint = "Check LLM_API_KEY is valid and LLM_BASE_URL is accessible. See .env for configuration options."
+
             error_context = (
                 f"Summary generation failed:\n"
                 f"  URL: {url}\n"
@@ -420,12 +431,14 @@ Return ONLY valid JSON."""
                 f"  Error Message: {str(e)}\n"
                 f"  LLM Provider: {self.deps.settings.llm_provider if self.deps.settings else 'unknown'}\n"
                 f"  LLM Base URL: {self.deps.settings.llm_base_url if self.deps.settings else 'unknown'}\n"
+                f"  Hint: {hint}\n"
                 f"  Traceback: {traceback.format_exc()}"
             )
             logger.error(error_context)
             return {
                 "summary": f"Saved from {urlparse(url).netloc}: {title}",
                 "key_points": [title],
+                "summary_fallback": True,
             }
 
     async def _research_topic(
